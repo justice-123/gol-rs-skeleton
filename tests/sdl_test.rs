@@ -4,9 +4,9 @@ use clap::{Command, Arg};
 use colored::Colorize;
 use log::{debug, Level};
 use sdl2::keyboard::Keycode;
-use tokio::{sync::{mpsc::{self, Sender, Receiver}, watch}, select};
+use tokio::{sync::{mpsc::{self, Sender, Receiver}, watch, oneshot}, select};
 use gol_rs::{util::{logger, cell::GolCell, args::PanicBehaviour}, gol::{Params, self, event::{Event, State}}};
-use utils::{io::{read_alive_counts, read_alive_cells}, visualise::assert_eq_board, sdl};
+use utils::{io::{read_alive_counts, read_alive_cells}, visualise::assert_eq_board, sdl, common::deadline};
 
 mod utils;
 
@@ -39,9 +39,10 @@ async fn test_sdl(headless: bool) -> Result<usize> {
     let (key_presses_forward_tx, key_presses_forward_rx) = mpsc::channel(10);
     let (events_tx, events_rx) = mpsc::channel(1000);
     let (events_forward_tx, events_forward_rx) = mpsc::channel(1000);
+    let (gol_done_tx, gol_done_rx) = oneshot::channel();
 
-    let gol = tokio::spawn(gol::run(params, events_tx, key_presses_forward_rx));
-    let tester = tokio::spawn(Tester::start(params, key_presses_tx, events_forward_rx));
+    let gol = tokio::spawn(async move { Ok(gol_done_tx.send(gol::run(params, events_tx, key_presses_forward_rx).await.unwrap())) });
+    let tester = tokio::spawn(Tester::start(params, key_presses_tx, events_forward_rx, gol_done_rx));
     let (gol, sdl, tester) = if headless {
         let sdl = sdl::run_headless(events_rx, key_presses_rx, events_forward_tx, key_presses_forward_tx);
         tokio::join!(gol, sdl, tester)
@@ -67,6 +68,7 @@ impl Tester {
         params: Params,
         key_presses: Sender<Keycode>,
         events: Receiver<Event>,
+        gol_done: oneshot::Receiver<()>,
     ) -> Result<()> {
         let (watcher_tx, watcher_rx) = watch::channel::<Option<Event>>(None);
         let mut tester = Tester {
@@ -79,14 +81,16 @@ impl Tester {
             alive_map: read_alive_counts(params.image_width as u32, params.image_height as u32)?,
         };
 
-        tokio::spawn(tester.test_pause(Duration::from_secs(1)));
-        tokio::spawn(tester.test_output(Duration::from_secs(10)));
-        let quit = tokio::spawn(tester.test_quitting(Duration::from_secs(14)));
+        tokio::spawn(tester.test_pause(Duration::from_secs(3)));
+        tokio::spawn(tester.test_output(Duration::from_secs(12)));
+        let quitting = tokio::spawn(tester.test_quitting(Duration::from_secs(16)));
+        let deadline = deadline(Duration::from_secs(25), "Your program should complete this test within 20 seconds. Is your program deadlocked?");
+        
+        let mut cell_flipped_received = false;
+        let mut turn_complete_received = false;
 
-        tokio::time::timeout(Duration::from_secs(30), async move {
-            let mut cell_flipped_received = false;
-            let mut turn_complete_received = false;
-            loop { select! {
+        loop {
+            select! {
                 gol_event = tester.events.recv() => {
                     match gol_event {
                         Some(Event::CellFlipped { completed_turns, cell }) => {
@@ -112,18 +116,20 @@ impl Tester {
                         Some(_) => (),
                         None => {
                             if !cell_flipped_received {
-                                panic!("No CellFlipped event received");
+                                panic!("No CellFlipped events received");
                             }
                             if !turn_complete_received {
-                                panic!("No TurnComplete event received");
+                                panic!("No TurnComplete events received");
                             }
-                            quit.await.unwrap();
+                            quitting.await.unwrap();
+                            gol_done.await.unwrap();
+                            deadline.abort();
                             break
                         },
                     }
                 },
-            }}
-        }).await.expect("Your program should complete this test within 20 seconds. Is your program deadlocked?");
+            }
+        }
 
         Ok(())
     }
@@ -166,7 +172,7 @@ impl Tester {
                     assert_eq!(filename.to_owned(), format!("{}x{}x{}", width, height, completed_turns), "Filename is not correct");
                 }
             }).await
-            .expect("No ImageOutput event received in 4 seconds");
+            .expect("No ImageOutput events received in 4 seconds");
         }
     }
     
@@ -181,7 +187,7 @@ impl Tester {
             tokio::time::timeout(Duration::from_secs(2), async {
                 event_watcher.wait_for(|e| 
                     matches!(e, Some(Event::StateChange { new_state: State::Pause, .. }))).await.unwrap()
-            }).await.expect("No Pause event received in 2 second");
+            }).await.expect("No Pause events received in 2 seconds");
             
             test_output.await;
 
@@ -191,7 +197,7 @@ impl Tester {
             tokio::time::timeout(Duration::from_secs(2), async {
                 event_watcher.wait_for(|e| 
                     matches!(e, Some(Event::StateChange { new_state: State::Executing, .. }))).await.unwrap();
-            }).await.expect("No Executing event received in 2 second");
+            }).await.expect("No Executing events received in 2 seconds");
         }
     }
 
@@ -205,17 +211,17 @@ impl Tester {
             tokio::time::timeout(Duration::from_secs(2), async {
                 event_watcher.wait_for(|e| 
                     matches!(e, Some(Event::FinalTurnComplete { .. }))).await.unwrap();
-            }).await.expect("No FinalTurnComplete event received in 2 seconds");
+            }).await.expect("No FinalTurnComplete events received in 2 seconds");
 
             tokio::time::timeout(Duration::from_secs(4), async {
                 event_watcher.wait_for(|e| 
                     matches!(e, Some(Event::ImageOutputComplete { .. }))).await.unwrap();
-            }).await.expect("No ImageOutput event received in 4 seconds");
+            }).await.expect("No ImageOutput events received in 4 seconds");
 
             tokio::time::timeout(Duration::from_secs(2), async {
                 event_watcher.wait_for(|e| 
                     matches!(e, Some(Event::StateChange { new_state: State::Quitting, .. }))).await.unwrap();
-            }).await.expect("No Quitting event received in 2 seconds");
+            }).await.expect("No Quitting events received in 2 seconds");
         }
     }
 
