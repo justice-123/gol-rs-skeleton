@@ -1,4 +1,4 @@
 pub mod cell;
 pub mod logger;
 pub mod args;
-pub mod averageturns;
+pub mod avgturns;

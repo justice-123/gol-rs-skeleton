@@ -1,6 +1,6 @@
 const BUF_SIZE: usize = 3;
 
-pub struct AverageTurns {
+pub struct AvgTurns {
     count: usize,
     last_completed_turns: u32,
     last_called: std::time::Instant,
@@ -8,9 +8,9 @@ pub struct AverageTurns {
     buf_durations: [tokio::time::Duration; BUF_SIZE],
 }
 
-impl AverageTurns {
+impl AvgTurns {
     pub fn new() -> Self {
-        AverageTurns {
+        AvgTurns {
             count: 0,
             last_completed_turns: 0,
             last_called: std::time::Instant::now(),

@@ -2,7 +2,6 @@ use anyhow::Result;
 use clap::Parser;
 use log::{info, Level};
 use tokio::{try_join, sync::mpsc::{self, Sender}};
-use colored::Colorize;
 use gol_rs::gol;
 use gol_rs::sdl;
 use gol_rs::util::{logger, args::Args};
@@ -12,10 +11,10 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     logger::init(Level::Info, args.backtrace, args.panic_behaviour);
     
-    info!(target: "Main", "{:<10} {}", "Threads", args.threads.to_string().cyan());
-    info!(target: "Main", "{:<10} {}", "Width", args.image_width.to_string().cyan());
-    info!(target: "Main", "{:<10} {}", "Height", args.image_height.to_string().cyan());
-    info!(target: "Main", "{:<10} {}", "Turns", args.turns.to_string().cyan());
+    info!(target: "Main", "{:<10} {}", "Threads", args.threads);
+    info!(target: "Main", "{:<10} {}", "Width", args.image_width);
+    info!(target: "Main", "{:<10} {}", "Height", args.image_height);
+    info!(target: "Main", "{:<10} {}", "Turns", args.turns);
     
     let (key_presses_tx, key_presses_rx) = mpsc::channel(10);
     let (events_tx, events_rx) = mpsc::channel(1000);

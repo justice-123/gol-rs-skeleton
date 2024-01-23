@@ -122,10 +122,9 @@ pub mod visualise {
 pub mod sdl {
     use std::time::Duration;
     use anyhow::Result;
-    use colored::Colorize;
     use log::info;
     use sdl2::keyboard::Keycode;
-    use gol_rs::{gol::{Params, event::{Event, State}}, sdl::window::Window, util::averageturns::AverageTurns};
+    use gol_rs::{gol::{Params, event::{Event, State}}, sdl::window::Window, util::avgturns::AvgTurns};
     use tokio::{sync::mpsc::{Sender, Receiver}, select};
 
     pub async fn run<T: AsRef<str>>(
@@ -145,40 +144,42 @@ pub mod sdl {
         let mut event_pump = sdl.take_event_pump()?;
         let mut dirty = false;
         let mut refresh_interval = tokio::time::interval(Duration::from_secs_f64(1_f64 / fps as f64));
-        let mut avg_turns = AverageTurns::new();
+        let mut avg_turns = AvgTurns::new();
     
-        'sdl: loop { select! {
-            _ = refresh_interval.tick() => {
-                event_pump.poll_event();
-                if dirty {
-                    sdl.render_frame()?;
-                    dirty = false;
-                }
-            },
-            key = key_presses.recv() => {
-                if let Some(key) = key {
-                    key_presses_forward.send(key).await?;
-                }
-            },
-            gol_event = events.recv() => {
-                if let Some(e) = gol_event.clone() {
-                    events_forward.send(e).await?;
-                }
-                match gol_event {
-                    Some(Event::CellFlipped { cell, .. }) => sdl.flip_cell(cell.x as u32, cell.y as u32),
-                    Some(Event::CellsFlipped { cells, ..}) => cells.iter().for_each(|cell| sdl.flip_cell(cell.x as u32, cell.y as u32)),
-                    Some(Event::TurnComplete { .. }) => dirty = true,
-                    Some(Event::AliveCellsCount { completed_turns, cells_count }) => info!(target: "Test", "Complete Turns {:<8} Alive Cells {:<8} Avg{:>5} turns/s", completed_turns, cells_count, avg_turns.get(completed_turns)),
-                    Some(Event::FinalTurnComplete { completed_turns, .. }) => info!(target: "Test","Complete Turns {:<8} {}", completed_turns, "Final Turn Complete".bright_green().bold()),
-                    Some(Event::ImageOutputComplete { completed_turns, filename }) => info!(target: "Test", "Complete Turns {:<8} {}", completed_turns, format!("File {} Output Done", filename).bright_green().bold()),
-                    Some(Event::StateChange { new_state, completed_turns }) => {
-                        info!(target: "Test", "Complete Turns {:<8} {:<20}", completed_turns, new_state.to_string().bright_green().bold());
-                        if let State::Quitting = new_state { break 'sdl }
-                    },
-                    None => break 'sdl,
-                }
-            },
-        }}
+        'sdl: loop {
+            select! {
+                _ = refresh_interval.tick() => {
+                    event_pump.poll_event();
+                    if dirty {
+                        sdl.render_frame()?;
+                        dirty = false;
+                    }
+                },
+                key = key_presses.recv() => {
+                    if let Some(key) = key {
+                        key_presses_forward.send(key).await?;
+                    }
+                },
+                gol_event = events.recv() => {
+                    if let Some(e) = gol_event.clone() {
+                        events_forward.send(e).await?;
+                    }
+                    match gol_event {
+                        Some(Event::CellFlipped { cell, .. }) => sdl.flip_cell(cell.x as u32, cell.y as u32),
+                        Some(Event::CellsFlipped { cells, ..}) => cells.iter().for_each(|cell| sdl.flip_cell(cell.x as u32, cell.y as u32)),
+                        Some(Event::TurnComplete { .. }) => dirty = true,
+                        Some(Event::AliveCellsCount { completed_turns, .. }) => info!(target: "Test", "{} Avg{:>5} turns/s", gol_event.unwrap(), avg_turns.get(completed_turns)),
+                        Some(Event::ImageOutputComplete { .. }) => info!(target: "Test", "{}", gol_event.unwrap()),
+                        Some(Event::FinalTurnComplete { .. }) => info!(target: "Test", "{}", gol_event.unwrap()),
+                        Some(Event::StateChange { new_state, .. }) => {
+                            info!(target: "Test", "{}", gol_event.unwrap());
+                            if let State::Quitting = new_state { break 'sdl }
+                        },
+                        None => break 'sdl,
+                    }
+                },
+            }
+        }
         
         Ok(())
     }
@@ -189,31 +190,32 @@ pub mod sdl {
         events_forward: Sender<Event>,
         key_presses_forward: Sender<Keycode>,
     ) -> Result<()> {
-        let mut avg_turns = AverageTurns::new();
-        'sdl: loop { select! {
-            key_presses = key_presses.recv() => {
-                if let Some(key) = key_presses {
-                    key_presses_forward.send(key).await?;
-                }
-            },
-            gol_event = events.recv() => {
-                if let Some(e) = gol_event.clone() {
-                    events_forward.send(e).await?;
-                }
-                match gol_event {
-                    Some(Event::AliveCellsCount { completed_turns, cells_count }) => info!(target: "Test", "Complete Turns {:<8} Alive Cells {:<8} Avg{:>5} turns/s", completed_turns, cells_count, avg_turns.get(completed_turns)),
-                    Some(Event::FinalTurnComplete { completed_turns, .. }) => info!(target: "Test","Complete Turns {:<8} {}", completed_turns, "Final Turn Complete".bright_green().bold()),
-                    Some(Event::ImageOutputComplete { completed_turns, filename }) => info!(target: "Test", "Complete Turns {:<8} {}", completed_turns, format!("File {} Output Done", filename).bright_green().bold()),
-                    Some(Event::StateChange { new_state, completed_turns }) => {
-                        info!(target: "Test", "Complete Turns {:<8} {:<20}", completed_turns, new_state.to_string().bright_green().bold());
-                        if let State::Quitting = new_state { break 'sdl }
-                    },
-                    None => break 'sdl,
-                    _ => (),
-                }
-            },
-        }}
-        
+        let mut avg_turns = AvgTurns::new();
+        'sdl: loop { 
+            select! {
+                key_presses = key_presses.recv() => {
+                    if let Some(key) = key_presses {
+                        key_presses_forward.send(key).await?;
+                    }
+                },
+                gol_event = events.recv() => {
+                    if let Some(e) = gol_event.clone() {
+                        events_forward.send(e).await?;
+                    }
+                    match gol_event {
+                        Some(Event::AliveCellsCount { completed_turns, .. }) => info!(target: "Test", "{} Avg{:>5} turns/s", gol_event.unwrap(), avg_turns.get(completed_turns)),
+                        Some(Event::ImageOutputComplete { .. }) => info!(target: "Test", "{}", gol_event.unwrap()),
+                        Some(Event::FinalTurnComplete { .. }) => info!(target: "Test", "{}", gol_event.unwrap()),
+                        Some(Event::StateChange { new_state, .. }) => {
+                            info!(target: "Test", "{}", gol_event.unwrap());
+                            if let State::Quitting = new_state { break 'sdl }
+                        },
+                        None => break 'sdl,
+                        _ => (),
+                    }
+                },
+            }
+        }
         Ok(())
     }
     
