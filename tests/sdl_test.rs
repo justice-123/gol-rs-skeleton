@@ -95,18 +95,21 @@ impl Tester {
                     match gol_event {
                         Some(Event::CellFlipped { completed_turns, cell }) => {
                             cell_flipped_received = true;
-                            assert!(completed_turns == tester.turn || completed_turns == tester.turn + 1);
+                            assert!(completed_turns == tester.turn || completed_turns == tester.turn + 1,
+                                "Expected completed {} turns, got {} instead", tester.turn, completed_turns);
                             tester.world[cell.y][cell.x] = !tester.world[cell.y][cell.x];
                         },
                         Some(Event::CellsFlipped { completed_turns, cells }) => {
                             cell_flipped_received = true;
-                            assert!(completed_turns == tester.turn || completed_turns == tester.turn + 1);
+                            assert!(completed_turns == tester.turn || completed_turns == tester.turn + 1,
+                                "Expected completed {} turns, got {} instead", tester.turn, completed_turns);
                             cells.iter().for_each(|cell| tester.world[cell.y][cell.x] = !tester.world[cell.y][cell.x]);
                         },
                         Some(Event::TurnComplete { completed_turns }) => {
                             turn_complete_received = true;
                             tester.turn += 1;
-                            assert_eq!(completed_turns, tester.turn);
+                            assert_eq!(completed_turns, tester.turn,
+                                "Expected completed {} turns, got {} instead", tester.turn, completed_turns);
                             tester.test_alive();
                             tester.test_gol();
                         },
