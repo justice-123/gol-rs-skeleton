@@ -1,9 +1,10 @@
 use std::fmt::Display;
-use clap::{Parser, ValueEnum, builder::PossibleValue};
+use clap::{builder::PossibleValue, ArgAction, Parser, ValueEnum};
 
 #[derive(Parser, Debug, Clone, Copy)]
+#[clap(disable_help_flag = true)]
 pub struct Args {
-    #[clap(
+    #[arg(
         short = 't',
         long,
         default_value_t = 8,
@@ -11,7 +12,7 @@ pub struct Args {
     )]
     pub threads: usize,
 
-    #[clap(
+    #[arg(
         short = 'w',
         long = "width",
         default_value_t = 512,
@@ -19,7 +20,7 @@ pub struct Args {
     )]
     pub image_width: usize,
 
-    #[clap(
+    #[arg(
         short = 'h',
         long = "height",
         default_value_t = 512,
@@ -27,42 +28,48 @@ pub struct Args {
     )]
     pub image_height: usize,
 
-    #[clap(
+    #[arg(
         short = 'f',
-        long = "fps",
+        long,
         default_value_t = 60,
         help = "Specify the FPS of the SDL window."
     )]
     pub fps: usize,
     
-    #[clap(
+    #[arg(
         long,
         default_value_t = 10000000,
         help = "Specify the number of turns to process."
     )]
     pub turns: usize,
 
-    #[clap(
+    #[arg(
         long,
         default_value_t = false,
         help = "Disable the SDL window for running in a headless environment."
     )]
     pub headless: bool,
 
-    #[clap(
+    #[arg(
         long,
         default_value_t = false,
         help = "Enable backtrace for debugging."
     )]
     pub backtrace: bool,
 
-    #[clap(
+    #[arg(
         long = "panic",
         value_enum,
         default_value_t = PanicBehaviour::Exit,
         help = "Specify behaviour on panic."
     )]
     pub panic_behaviour: PanicBehaviour,
+
+    #[arg(
+        long,
+        action = ArgAction::HelpLong
+    )]
+    help: Option<bool>,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -83,7 +90,7 @@ impl ValueEnum for PanicBehaviour {
         &[PanicBehaviour::Exit, PanicBehaviour::Ignore]
     }
 
-    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+    fn to_possible_value(&self) -> Option<PossibleValue> {
         match self {
             PanicBehaviour::Exit => Some(PossibleValue::new("exit")),
             PanicBehaviour::Ignore => Some(PossibleValue::new("ignore")),
