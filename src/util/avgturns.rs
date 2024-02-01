@@ -24,7 +24,7 @@ impl AvgTurns {
         self.buf_durations[self.count % BUF_SIZE] = self.last_called.elapsed();
         self.last_called = std::time::Instant::now();
         self.last_completed_turns = completed_turns;
-        self.count += 1;
+        (self.count, _) = self.count.overflowing_add(1);
         return self.buf_turns.iter().sum::<u32>() / self.buf_durations.iter()
             .map(|t| t.as_secs_f32().round() as u32).sum::<u32>().clamp(1, u32::MAX);
     }
