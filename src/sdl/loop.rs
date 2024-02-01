@@ -1,6 +1,6 @@
+use crate::args::Args;
 use crate::gol::event::{Event, State};
 use crate::sdl::window::Window;
-use crate::util::args::Args;
 use crate::util::avgturns::AvgTurns;
 use anyhow::Result;
 use log::info;

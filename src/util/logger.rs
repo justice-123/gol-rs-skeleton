@@ -2,7 +2,7 @@ use backtrace::Backtrace;
 use log::{error, Level};
 use std::panic;
 use colored::Colorize;
-use crate::util::args::PanicBehaviour;
+use crate::args::PanicBehaviour;
 
 pub fn init(level: Level, backtrace: bool, panic_behaviour: PanicBehaviour) {
     let level = std::env::var("RUST_LOG").unwrap_or(level.to_string());

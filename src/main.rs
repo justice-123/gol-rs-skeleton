@@ -2,9 +2,10 @@ use anyhow::Result;
 use clap::Parser;
 use log::{info, Level};
 use tokio::{try_join, sync::mpsc::{self, Sender}};
+use gol_rs::args::Args;
 use gol_rs::gol;
 use gol_rs::sdl;
-use gol_rs::util::{logger, args::Args};
+use gol_rs::util::logger;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {

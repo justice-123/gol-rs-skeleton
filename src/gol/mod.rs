@@ -1,4 +1,4 @@
-use crate::util::args::Args;
+use crate::args::Args;
 use crate::gol::distributor::{DistributorChannels, distributor};
 use crate::gol::event::Event;
 use crate::gol::io::{start_io, IoChannels};

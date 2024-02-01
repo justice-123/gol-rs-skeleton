@@ -5,7 +5,7 @@ use colored::Colorize;
 use log::{debug, Level};
 use sdl2::keyboard::Keycode;
 use tokio::{sync::{mpsc::{self, Sender, Receiver}, watch, oneshot}, select};
-use gol_rs::{util::{logger, cell::GolCell, args::PanicBehaviour}, gol::{Params, self, event::{Event, State}}};
+use gol_rs::{args::PanicBehaviour, gol::{Params, self, event::{Event, State}}, util::{logger, cell::GolCell}};
 use utils::{io::{read_alive_counts, read_alive_cells}, visualise::assert_eq_board, sdl, common::deadline};
 
 mod utils;

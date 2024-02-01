@@ -1,6 +1,6 @@
 use core::panic;
 use std::time::Duration;
-use gol_rs::util::args::PanicBehaviour;
+use gol_rs::args::PanicBehaviour;
 use log::{debug, Level};
 use tokio::sync::mpsc;
 use colored::Colorize;
