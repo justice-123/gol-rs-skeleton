@@ -5,6 +5,7 @@ use crate::util::avgturns::AvgTurns;
 use anyhow::Result;
 use log::info;
 use sdl2::keyboard::Keycode;
+use sdl2::event::Event as SdlEvent;
 use tokio::{sync::mpsc::{Receiver, Sender}, select};
 use std::time::Duration;
 
@@ -28,11 +29,11 @@ pub async fn run(
         select! {
             _ = refresh_interval.tick() => {
                 match event_pump.poll_event() {
-                    Some(sdl2::event::Event::Quit { .. } | sdl2::event::Event::KeyDown { keycode: Some(Keycode::Escape), ..})  => key_presses.send(Keycode::Q).await?,
-                    Some(sdl2::event::Event::KeyDown { keycode: Some(Keycode::P), .. }) => key_presses.send(Keycode::P).await?,
-                    Some(sdl2::event::Event::KeyDown { keycode: Some(Keycode::S), .. }) => key_presses.send(Keycode::S).await?,
-                    Some(sdl2::event::Event::KeyDown { keycode: Some(Keycode::Q), .. }) => key_presses.send(Keycode::Q).await?,
-                    Some(sdl2::event::Event::KeyDown { keycode: Some(Keycode::K), .. }) => key_presses.send(Keycode::K).await?,
+                    Some(SdlEvent::Quit { .. } | SdlEvent::KeyDown { keycode: Some(Keycode::Escape), ..})  => key_presses.send(Keycode::Q).await?,
+                    Some(SdlEvent::KeyDown { keycode: Some(Keycode::P), .. }) => key_presses.send(Keycode::P).await?,
+                    Some(SdlEvent::KeyDown { keycode: Some(Keycode::S), .. }) => key_presses.send(Keycode::S).await?,
+                    Some(SdlEvent::KeyDown { keycode: Some(Keycode::Q), .. }) => key_presses.send(Keycode::Q).await?,
+                    Some(SdlEvent::KeyDown { keycode: Some(Keycode::K), .. }) => key_presses.send(Keycode::K).await?,
                     _ => (),
                 }
                 if dirty {
