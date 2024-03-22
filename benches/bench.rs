@@ -16,7 +16,7 @@ fn bench_gol(c: &mut Criterion) {
                 image_width: 512,
                 image_height: 512,
             };
-            let runtime = tokio::runtime::Builder::new_current_thread()
+            let runtime = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
                 .unwrap();
