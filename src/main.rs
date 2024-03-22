@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 use log::{info, Level};
+use sdl2::keyboard::Keycode;
 use tokio::{try_join, sync::mpsc::{self, Sender}};
 use gol_rs::args::Args;
 use gol_rs::gol;
@@ -20,7 +21,7 @@ async fn main() -> Result<()> {
     let (key_presses_tx, key_presses_rx) = mpsc::channel(10);
     let (events_tx, events_rx) = mpsc::channel(1000);
 
-    tokio::spawn(sigterm(key_presses_tx.clone()));
+    tokio::spawn(sigint(key_presses_tx.clone()));
 
     let gol = gol::run(args, events_tx, key_presses_rx);
     if !args.headless {
@@ -32,16 +33,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-#[cfg(target_family = "unix")]
-async fn sigterm(key_presses_tx: Sender<sdl2::keyboard::Keycode>) {
-    use tokio::signal::unix::{signal, SignalKind};
-    signal(SignalKind::terminate()).unwrap().recv().await;
-    key_presses_tx.send(sdl2::keyboard::Keycode::Q).await.unwrap();
-}
-
-#[cfg(target_family = "windows")]
-async fn sigterm(key_presses_tx: Sender<sdl2::keyboard::Keycode>) {
-    use tokio::signal;
-    signal::ctrl_c().await.unwrap();
-    key_presses_tx.send(sdl2::keyboard::Keycode::Q).await.unwrap();
+async fn sigint(key_presses_tx: Sender<Keycode>) {
+    tokio::signal::ctrl_c().await.unwrap();
+    key_presses_tx.send(Keycode::Q).await.unwrap();
 }
