@@ -85,7 +85,7 @@ impl Tester {
         tokio::spawn(tester.test_output(Duration::from_secs(12)));
         let quitting = tokio::spawn(tester.test_quitting(Duration::from_secs(16)));
         let deadline = deadline(Duration::from_secs(25), "Your program should complete this test within 20 seconds. Is your program deadlocked?");
-        
+
         let mut cell_flipped_received = false;
         let mut turn_complete_received = false;
 
@@ -139,7 +139,7 @@ impl Tester {
 
     fn test_alive(&self) {
         let alive_count = self.world.iter().flatten().filter(|&&cell| cell == 0xFF_u8).count();
-        let expected = if self.turn <= 10000 { *self.alive_map.get(&self.turn).unwrap() } 
+        let expected = if self.turn <= 10000 { *self.alive_map.get(&self.turn).unwrap() }
             else if self.turn % 2 == 0 { 5565 } else { 5567 };
         assert_eq!(
             alive_count, expected as usize,
@@ -152,19 +152,19 @@ impl Tester {
             let path = format!("check/images/{}x{}x{}.pgm", self.params.image_width, self.params.image_height, self.turn);
             let expected_alive = read_alive_cells(path, self.params.image_width, self.params.image_height).unwrap();
             let alive_cells = self.world.iter().enumerate()
-                .flat_map(|(y, row)| 
+                .flat_map(|(y, row)|
                     row.iter().enumerate()
                         .filter(|&(_, &cell)| cell != 0_u8)
                         .map(move |(x, _)| GolCell { x, y }))
                 .collect::<Vec<GolCell>>();
-            assert_eq_board(self.params, &alive_cells, &expected_alive); 
+            assert_eq_board(self.params, &alive_cells, &expected_alive);
         }
     }
 
     fn test_output(&self, delay: Duration) -> impl Future<Output = ()> {
         let key_presses = self.key_presses.clone();
         let mut event_watcher = self.events_watcher.clone();
-        let (width, height) = (self.params.image_width, self.params.image_height); 
+        let (width, height) = (self.params.image_width, self.params.image_height);
         async move {
             tokio::time::sleep(delay).await;
             debug!(target: "Test", "{}", "Testing image output".cyan());
@@ -178,7 +178,7 @@ impl Tester {
             .expect("No ImageOutput events received in 4 seconds");
         }
     }
-    
+
     fn test_pause(&self, delay: Duration) -> impl Future<Output = ()> {
         let key_presses = self.key_presses.clone();
         let mut event_watcher = self.events_watcher.clone();
@@ -188,17 +188,17 @@ impl Tester {
             debug!(target: "Test", "{}", "Testing Pause key pressed".cyan());
             key_presses.send(Keycode::P).await.unwrap();
             tokio::time::timeout(Duration::from_secs(2), async {
-                event_watcher.wait_for(|e| 
+                event_watcher.wait_for(|e|
                     matches!(e, Some(Event::StateChange { new_state: State::Pause, .. }))).await.unwrap()
             }).await.expect("No Pause events received in 2 seconds");
-            
+
             test_output.await;
 
             tokio::time::sleep(Duration::from_secs(2)).await;
             debug!(target: "Test", "{}", "Testing Pause key pressed again".cyan());
             key_presses.send(Keycode::P).await.unwrap();
             tokio::time::timeout(Duration::from_secs(2), async {
-                event_watcher.wait_for(|e| 
+                event_watcher.wait_for(|e|
                     matches!(e, Some(Event::StateChange { new_state: State::Executing, .. }))).await.unwrap();
             }).await.expect("No Executing events received in 2 seconds");
         }
@@ -212,21 +212,20 @@ impl Tester {
             debug!(target: "Test", "{}", "Testing Quit key pressed".cyan());
             key_presses.send(Keycode::Q).await.unwrap();
             tokio::time::timeout(Duration::from_secs(2), async {
-                event_watcher.wait_for(|e| 
+                event_watcher.wait_for(|e|
                     matches!(e, Some(Event::FinalTurnComplete { .. }))).await.unwrap();
             }).await.expect("No FinalTurnComplete events received in 2 seconds");
 
             tokio::time::timeout(Duration::from_secs(4), async {
-                event_watcher.wait_for(|e| 
+                event_watcher.wait_for(|e|
                     matches!(e, Some(Event::ImageOutputComplete { .. }))).await.unwrap();
             }).await.expect("No ImageOutput events received in 4 seconds");
 
             tokio::time::timeout(Duration::from_secs(2), async {
-                event_watcher.wait_for(|e| 
+                event_watcher.wait_for(|e|
                     matches!(e, Some(Event::StateChange { new_state: State::Quitting, .. }))).await.unwrap();
             }).await.expect("No Quitting events received in 2 seconds");
         }
     }
 
 }
-

@@ -102,7 +102,7 @@ impl IoState {
             .unwrap();
         let path = format!("out/{}.pgm", filename);
         let file = File::create(path).await?;
-        
+
         let mut writer = BufWriter::new(file);
         writer.write_all("P5".as_bytes()).await?;
         writer.write_all("\n".as_bytes()).await?;

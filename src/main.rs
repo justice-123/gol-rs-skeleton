@@ -11,12 +11,12 @@ use gol_rs::util::logger;
 async fn main() -> Result<()> {
     let args = Args::parse();
     logger::init(Level::Info, args.backtrace, args.panic_behaviour);
-    
+
     info!(target: "Main", "{:<10} {}", "Threads", args.threads);
     info!(target: "Main", "{:<10} {}", "Width", args.image_width);
     info!(target: "Main", "{:<10} {}", "Height", args.image_height);
     info!(target: "Main", "{:<10} {}", "Turns", args.turns);
-    
+
     let (key_presses_tx, key_presses_rx) = mpsc::channel(10);
     let (events_tx, events_rx) = mpsc::channel(1000);
 

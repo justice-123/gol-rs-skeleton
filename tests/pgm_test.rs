@@ -36,7 +36,7 @@ async fn test_pgm(threads: usize) -> usize {
     let mut passed_test = 0;
     let size = [(16_usize, 16_usize), (64, 64), (512, 512)];
     let turns = [0_usize, 1, 100];
-    
+
     for (width, height) in size {
         for expected_turns in turns {
             let path = format!("check/images/{}x{}x{}.pgm", width, height, expected_turns);

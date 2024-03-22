@@ -20,7 +20,7 @@ pub fn distributor(params: Params, mut channels: DistributorChannels) {
     // TODO: Create a 2D vector to store the world.
 
     let turn = 0;
-    
+
     // TODO: Execute all turns of the Game of Life.
 
     // TODO: Report the final state using FinalTurnCompleteEvent.
@@ -29,6 +29,6 @@ pub fn distributor(params: Params, mut channels: DistributorChannels) {
     // Make sure that the Io has finished any output before exiting.
     io_command.send(IoCommand::IoCheckIdle).unwrap();
     io_idle.blocking_recv();
-    
+
     events.blocking_send(Event::StateChange { completed_turns: turn, new_state: State::Quitting }).unwrap();
 }

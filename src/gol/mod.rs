@@ -20,17 +20,17 @@ pub struct Params {
 }
 
 pub async fn run<P>(
-    params: P, 
+    params: P,
     events: Sender<Event>,
-    key_presses: Receiver<Keycode>, 
-) -> Result<()> 
+    key_presses: Receiver<Keycode>,
+) -> Result<()>
 where
-    P: Into<Params> + Copy + Send + Sync + 'static 
+    P: Into<Params> + Copy + Send + Sync + 'static
 {
     let params: Params = params.into();
 
     // TODO: Put the missing channels in here.
-    
+
     let (io_command_tx, io_command_rx) = mpsc::unbounded_channel();
     let (io_idle_tx, io_idle_rx) = mpsc::unbounded_channel();
 

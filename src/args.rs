@@ -35,7 +35,7 @@ pub struct Args {
         help = "Specify the FPS of the SDL window."
     )]
     pub fps: usize,
-    
+
     #[arg(
         long,
         default_value_t = 10000000,

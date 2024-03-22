@@ -22,9 +22,9 @@ pub mod io {
             height as u32,
             "Incorrect height"
         );
-    
+
         Ok(pgm.into_bytes().chunks(width).enumerate()
-            .flat_map(|(y, row)| 
+            .flat_map(|(y, row)|
                 row.iter().enumerate()
                     .filter(|&(_, &cell)| cell != 0_u8)
                     .map(move |(x, _)| GolCell { x, y }))
@@ -62,10 +62,10 @@ pub mod visualise {
         input_cells: &[GolCell],
         expected_cells: &[GolCell]
     ) {
-        let all_match = 
-            input_cells.len() == expected_cells.len() 
+        let all_match =
+            input_cells.len() == expected_cells.len()
             && expected_cells.iter().all(|cell| input_cells.contains(cell));
-        
+
         if all_match {
             return
         }
@@ -109,8 +109,8 @@ pub mod visualise {
         let mut output: Vec<String> = vec![];
         output.push(format!("   ┌{}┐  ", (0..width*2).map(|_| "─").collect::<String>()));
         output.append(&mut cells.iter().enumerate()
-            .map(|(y, row)| 
-                format!("{:2} │{}│  ", y + 1, 
+            .map(|(y, row)|
+                format!("{:2} │{}│  ", y + 1,
                     row.iter().map(|&cell| if cell == 0_u8 { "  " } else { "██" }).collect::<String>()))
             .collect());
         output.push(format!("   └{}┘  ", (0..width*2).map(|_| "─").collect::<String>()));
@@ -145,7 +145,7 @@ pub mod sdl {
         let mut dirty = false;
         let mut refresh_interval = tokio::time::interval(Duration::from_secs_f64(1_f64 / fps as f64));
         let mut avg_turns = AvgTurns::new();
-    
+
         'sdl: loop {
             select! {
                 _ = refresh_interval.tick() => {
@@ -180,7 +180,6 @@ pub mod sdl {
                 },
             }
         }
-        
         Ok(())
     }
 
@@ -191,7 +190,7 @@ pub mod sdl {
         key_presses_forward: Sender<Keycode>,
     ) -> Result<()> {
         let mut avg_turns = AvgTurns::new();
-        'sdl: loop { 
+        'sdl: loop {
             select! {
                 key_presses = key_presses.recv() => {
                     if let Some(key) = key_presses {
@@ -218,7 +217,6 @@ pub mod sdl {
         }
         Ok(())
     }
-    
 }
 
 #[allow(dead_code)]
@@ -227,7 +225,7 @@ pub mod common {
     use colored::Colorize;
     use tokio::task::JoinHandle;
 
-    pub fn deadline<T>(ddl: Duration, msg: T) -> JoinHandle<()> 
+    pub fn deadline<T>(ddl: Duration, msg: T) -> JoinHandle<()>
     where
         T: AsRef<str> + Display + Send + 'static + Colorize
     {

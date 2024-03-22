@@ -35,21 +35,21 @@ async fn test_alive() {
     tokio::spawn(gol::run(params, events_tx.clone(), key_presses_rx));
 
     let mut ddl = deadline(Duration::from_secs(5), "No AliveCellsCount event received in 5 seconds");
-    
+
     let mut succeed = 0;
     loop {
         let event = events_rx.recv().await;
         match event {
             Some(Event::AliveCellsCount { completed_turns, cells_count }) => {
-                if completed_turns == 0 { 
-                    continue 
+                if completed_turns == 0 {
+                    continue
                 }
                 ddl.abort();
-                
+
                 let expected = if completed_turns <= 10000 {
                     *alive_map.get(&completed_turns).unwrap()
                 } else if completed_turns % 2 == 0 { 5565 } else { 5567 };
-                
+
                 assert_eq!(
                     cells_count, expected,
                     "At turn {} expected {} alive cells, got {} instead", completed_turns, expected, cells_count
@@ -70,4 +70,3 @@ async fn test_alive() {
     println!("\ntest result: {}. {} passed; finished in {:.2}s\n", "ok".green(), 1, start.elapsed().as_secs_f32());
     std::process::exit(0);
 }
-

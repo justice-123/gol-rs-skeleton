@@ -83,7 +83,7 @@ impl Window {
         self.pixels[4 * (y * self.width + x) as usize + 3] =
             !self.pixels[4 * (y * self.width + x) as usize + 3];
     }
-    
+
     pub fn count_pixels(&self) -> u32 {
         self.pixels
             .chunks(4)

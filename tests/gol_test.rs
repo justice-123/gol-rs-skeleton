@@ -23,7 +23,7 @@ async fn main() {
         .get_matches();
     let threads = command.get_one::<usize>("threads").unwrap().to_owned();
     assert!(threads > 0, "Threads for testing should be greater than 0");
-    
+
     let passed_tests = test_gol(threads).await;
     println!("\ntest result: {}. {} passed; finished in {:.2}s\n", "ok".green(), passed_tests, start.elapsed().as_secs_f32());
     std::process::exit(0);
@@ -56,7 +56,7 @@ async fn test_gol(threads: usize) -> usize {
                         Some(Event::FinalTurnComplete { completed_turns, alive }) => {
                             final_turn_complete = true;
                             assert_eq!(
-                                completed_turns, expected_turns as u32, 
+                                completed_turns, expected_turns as u32,
                                 "Expected completed turns is {}, but got {}", expected_turns, completed_turns
                             );
                             assert_eq_board(params, &alive, &expected_alive);
@@ -74,4 +74,3 @@ async fn test_gol(threads: usize) -> usize {
     }
     passed_tests
 }
-

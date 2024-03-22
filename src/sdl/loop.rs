@@ -18,13 +18,13 @@ pub async fn run(
         args.image_width as u32,
         args.image_height as u32,
     )?;
-    
+
     let mut event_pump = sdl.take_event_pump()?;
     let mut dirty = false;
     let mut refresh_interval = tokio::time::interval(Duration::from_secs_f64(1_f64 / args.fps as f64));
     let mut avg_turns = AvgTurns::new();
 
-    'sdl: loop { 
+    'sdl: loop {
         select! {
             _ = refresh_interval.tick() => {
                 match event_pump.poll_event() {
