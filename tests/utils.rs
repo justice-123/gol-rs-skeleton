@@ -1,7 +1,7 @@
 #[allow(dead_code)]
 pub mod io {
     use std::{path::Path, collections::HashMap, fs::File};
-    use gol_rs::util::cell::CellCoord;
+    use gol_rs::util::cell::{CellCoord, CellValue};
     use image::io::Reader;
     use anyhow::Result;
     use serde::Deserialize;
@@ -26,7 +26,7 @@ pub mod io {
         Ok(pgm.into_bytes().chunks(width).enumerate()
             .flat_map(|(y, row)|
                 row.iter().enumerate()
-                    .filter(|&(_, &cell)| cell != 0_u8)
+                    .filter(|&(_, &cell)| CellValue::from(cell).is_alive())
                     .map(move |(x, _)| CellCoord::new(x, y)))
             .collect()
         )
@@ -54,7 +54,7 @@ pub mod io {
 
 #[allow(dead_code)]
 pub mod visualise {
-    use gol_rs::{gol::Params, util::cell::CellCoord};
+    use gol_rs::{gol::Params, util::cell::{CellCoord, CellValue}};
     use log::info;
 
     pub fn assert_eq_board(
@@ -71,10 +71,10 @@ pub mod visualise {
         }
 
         if params.image_width == 16 && params.image_height == 16 {
-            let mut input_matrix = vec![vec![0_u8; params.image_width]; params.image_height];
+            let mut input_matrix = vec![vec![CellValue::Dead; params.image_width]; params.image_height];
             let mut expected_matrix = input_matrix.clone();
-            input_cells.iter().for_each(|cell| input_matrix[cell.y][cell.x] = 0xFF_u8);
-            expected_cells.iter().for_each(|cell| expected_matrix[cell.y][cell.x] = 0xFF_u8);
+            input_cells.iter().for_each(|cell| input_matrix[cell.y][cell.x] = CellValue::Alive);
+            expected_cells.iter().for_each(|cell| expected_matrix[cell.y][cell.x] = CellValue::Alive);
             let mut input = matrix_to_strings(&input_matrix);
             let mut expected = matrix_to_strings(&expected_matrix);
             input.insert(0, get_centered_banner(39, "Your result", ' '));
@@ -103,7 +103,7 @@ pub mod visualise {
         })
     }
 
-    fn matrix_to_strings(cells: &Vec<Vec<u8>>) -> Vec<String> {
+    fn matrix_to_strings(cells: &Vec<Vec<CellValue>>) -> Vec<String> {
         assert!(cells.len() > 0);
         let width = cells[0].len();
         let mut output: Vec<String> = vec![];
@@ -111,7 +111,7 @@ pub mod visualise {
         output.append(&mut cells.iter().enumerate()
             .map(|(y, row)|
                 format!("{:2} │{}│  ", y + 1,
-                    row.iter().map(|&cell| if cell == 0_u8 { "  " } else { "██" }).collect::<String>()))
+                    row.iter().map(|&cell| if cell.is_dead() { "  " } else { "██" }).collect::<String>()))
             .collect());
         output.push(format!("   └{}┘  ", (0..width*2).map(|_| "─").collect::<String>()));
         output

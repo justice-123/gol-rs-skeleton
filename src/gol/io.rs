@@ -1,6 +1,6 @@
 use crate::gol::Params;
+use crate::util::{cell::CellValue, traits::AsBytes};
 use anyhow::{Context, Result};
-use image::EncodableLayout;
 use log::trace;
 use tokio::{sync::mpsc::{UnboundedReceiver, UnboundedSender}, fs::File, io::{AsyncReadExt, AsyncWriteExt, BufWriter}};
 
@@ -15,8 +15,8 @@ pub struct IoChannels {
     pub command: Option<UnboundedReceiver<IoCommand>>,
     pub idle: Option<UnboundedSender<bool>>,
     pub filename: Option<UnboundedReceiver<String>>,
-    pub input: Option<UnboundedSender<u8>>,
-    pub output: Option<UnboundedReceiver<u8>>,
+    pub input: Option<UnboundedSender<CellValue>>,
+    pub output: Option<UnboundedReceiver<CellValue>>,
 }
 
 struct IoState {
@@ -82,7 +82,7 @@ impl IoState {
                 .input
                 .as_ref()
                 .context("Missing input channel")?
-                .send(byte)
+                .send(CellValue::from(byte))
                 .unwrap();
         }
 
@@ -113,7 +113,7 @@ impl IoState {
         writer.write_all(255_usize.to_string().as_bytes()).await?;
         writer.write_all("\n".as_bytes()).await?;
 
-        let mut world = vec![0_u8; self.params.image_width * self.params.image_height];
+        let mut world = vec![CellValue::Dead; self.params.image_width * self.params.image_height];
         let output_ch = self.channels.output.as_mut().context("Missing output channel")?;
         for i in world.iter_mut() {
             *i = output_ch.recv().await.unwrap();
@@ -124,4 +124,3 @@ impl IoState {
         Ok(())
     }
 }
-

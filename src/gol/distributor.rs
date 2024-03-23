@@ -1,6 +1,7 @@
 use crate::gol::event::{Event, State};
 use crate::gol::Params;
 use crate::gol::io::IoCommand;
+use crate::util::cell::CellValue;
 use tokio::sync::mpsc::{Sender, UnboundedSender, UnboundedReceiver};
 
 pub struct DistributorChannels {
@@ -8,8 +9,8 @@ pub struct DistributorChannels {
     pub io_command: Option<UnboundedSender<IoCommand>>,
     pub io_idle: Option<UnboundedReceiver<bool>>,
     pub io_filename: Option<UnboundedSender<String>>,
-    pub io_output: Option<UnboundedSender<u8>>,
-    pub io_input: Option<UnboundedReceiver<u8>>,
+    pub io_output: Option<UnboundedSender<CellValue>>,
+    pub io_input: Option<UnboundedReceiver<CellValue>>,
 }
 
 pub fn distributor(params: Params, mut channels: DistributorChannels) {

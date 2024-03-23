@@ -5,7 +5,7 @@ use colored::Colorize;
 use log::{debug, Level};
 use sdl2::keyboard::Keycode;
 use tokio::{sync::{mpsc::{self, Sender, Receiver}, watch, oneshot}, select};
-use gol_rs::{args::PanicBehaviour, gol::{Params, self, event::{Event, State}}, util::{logger, cell::CellCoord}};
+use gol_rs::{args::PanicBehaviour, gol::{self, event::{Event, State}, Params}, util::{cell::{CellCoord, CellValue}, logger}};
 use utils::{io::{read_alive_counts, read_alive_cells}, visualise::assert_eq_board, sdl, common::deadline};
 
 mod utils;
@@ -59,7 +59,7 @@ struct Tester {
     events: Receiver<Event>,
     events_watcher: watch::Receiver<Option<Event>>,
     turn: u32,
-    world: Vec<Vec<u8>>,
+    world: Vec<Vec<CellValue>>,
     alive_map: HashMap<u32, u32>,
 }
 
@@ -77,7 +77,7 @@ impl Tester {
             events,
             events_watcher: watcher_rx,
             turn: 0,
-            world: vec![vec![0_u8; params.image_width]; params.image_height],
+            world: vec![vec![CellValue::Dead; params.image_width]; params.image_height],
             alive_map: read_alive_counts(params.image_width as u32, params.image_height as u32)?,
         };
 
@@ -97,13 +97,13 @@ impl Tester {
                             cell_flipped_received = true;
                             assert!(completed_turns == tester.turn || completed_turns == tester.turn + 1,
                                 "Expected completed {} turns, got {} instead", tester.turn, completed_turns);
-                            tester.world[cell.y][cell.x] = !tester.world[cell.y][cell.x];
+                            tester.world[cell.y][cell.x].flip();
                         },
                         Some(Event::CellsFlipped { completed_turns, cells }) => {
                             cell_flipped_received = true;
                             assert!(completed_turns == tester.turn || completed_turns == tester.turn + 1,
                                 "Expected completed {} turns, got {} instead", tester.turn, completed_turns);
-                            cells.iter().for_each(|cell| tester.world[cell.y][cell.x] = !tester.world[cell.y][cell.x]);
+                            cells.iter().for_each(|cell| tester.world[cell.y][cell.x].flip());
                         },
                         Some(Event::TurnComplete { completed_turns }) => {
                             turn_complete_received = true;
@@ -138,7 +138,7 @@ impl Tester {
     }
 
     fn test_alive(&self) {
-        let alive_count = self.world.iter().flatten().filter(|&&cell| cell == 0xFF_u8).count();
+        let alive_count = self.world.iter().flatten().filter(|&&cell| cell.is_alive()).count();
         let expected = if self.turn <= 10000 { *self.alive_map.get(&self.turn).unwrap() }
             else if self.turn % 2 == 0 { 5565 } else { 5567 };
         assert_eq!(
@@ -154,7 +154,7 @@ impl Tester {
             let alive_cells = self.world.iter().enumerate()
                 .flat_map(|(y, row)|
                     row.iter().enumerate()
-                        .filter(|&(_, &cell)| cell != 0_u8)
+                        .filter(|&(_, &cell)| cell.is_alive())
                         .map(move |(x, _)| CellCoord::new(x, y)))
                 .collect::<Vec<CellCoord>>();
             assert_eq_board(self.params, &alive_cells, &expected_alive);
