@@ -1,4 +1,4 @@
-use crate::util::cell::GolCell;
+use crate::util::cell::CellCoord;
 use std::fmt::Display;
 
 /// State represents a change in the state of execution.
@@ -51,10 +51,10 @@ pub enum Event {
     AliveCellsCount { completed_turns: u32, cells_count: u32 },
     ImageOutputComplete { completed_turns: u32, filename: String },
     StateChange { completed_turns: u32, new_state: State },
-    CellFlipped { completed_turns: u32, cell: GolCell },
-    CellsFlipped { completed_turns: u32, cells: Vec<GolCell> },
+    CellFlipped { completed_turns: u32, cell: CellCoord },
+    CellsFlipped { completed_turns: u32, cells: Vec<CellCoord> },
     TurnComplete { completed_turns: u32 },
-    FinalTurnComplete { completed_turns: u32, alive: Vec<GolCell> },
+    FinalTurnComplete { completed_turns: u32, alive: Vec<CellCoord> },
 }
 
 impl Display for Event {

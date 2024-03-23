@@ -43,8 +43,8 @@ pub async fn run(
             },
             gol_event = events.recv() => {
                 match gol_event {
-                    Some(Event::CellFlipped { cell, .. }) => sdl.flip_cell(cell.x as u32, cell.y as u32),
-                    Some(Event::CellsFlipped { cells, ..}) => cells.iter().for_each(|cell| sdl.flip_cell(cell.x as u32, cell.y as u32)),
+                    Some(Event::CellFlipped { cell, .. }) => sdl.flip_pixel(cell.x as u32, cell.y as u32),
+                    Some(Event::CellsFlipped { cells, ..}) => cells.iter().for_each(|cell| sdl.flip_pixel(cell.x as u32, cell.y as u32)),
                     Some(Event::TurnComplete { .. }) => dirty = true,
                     Some(Event::AliveCellsCount { completed_turns, .. }) => info!(target: "Event", "{} Avg{:>5} turns/s", gol_event.unwrap(), avg_turns.get(completed_turns)),
                     Some(Event::ImageOutputComplete { .. }) => info!(target: "Event", "{}", gol_event.unwrap()),

@@ -1,7 +1,7 @@
 #[allow(dead_code)]
 pub mod io {
     use std::{path::Path, collections::HashMap, fs::File};
-    use gol_rs::util::cell::GolCell;
+    use gol_rs::util::cell::CellCoord;
     use image::io::Reader;
     use anyhow::Result;
     use serde::Deserialize;
@@ -10,7 +10,7 @@ pub mod io {
         path: P,
         width: usize,
         height: usize
-    ) -> Result<Vec<GolCell>> {
+    ) -> Result<Vec<CellCoord>> {
         let pgm = Reader::open(path).unwrap().decode().unwrap();
         assert_eq!(
             pgm.width(),
@@ -27,7 +27,7 @@ pub mod io {
             .flat_map(|(y, row)|
                 row.iter().enumerate()
                     .filter(|&(_, &cell)| cell != 0_u8)
-                    .map(move |(x, _)| GolCell { x, y }))
+                    .map(move |(x, _)| CellCoord { x, y }))
             .collect()
         )
     }
@@ -54,13 +54,13 @@ pub mod io {
 
 #[allow(dead_code)]
 pub mod visualise {
-    use gol_rs::{gol::Params, util::cell::GolCell};
+    use gol_rs::{gol::Params, util::cell::CellCoord};
     use log::info;
 
     pub fn assert_eq_board(
         params: Params,
-        input_cells: &[GolCell],
-        expected_cells: &[GolCell]
+        input_cells: &[CellCoord],
+        expected_cells: &[CellCoord]
     ) {
         let all_match =
             input_cells.len() == expected_cells.len()
@@ -165,8 +165,8 @@ pub mod sdl {
                         events_forward.send(e).await?;
                     }
                     match gol_event {
-                        Some(Event::CellFlipped { cell, .. }) => sdl.flip_cell(cell.x as u32, cell.y as u32),
-                        Some(Event::CellsFlipped { cells, ..}) => cells.iter().for_each(|cell| sdl.flip_cell(cell.x as u32, cell.y as u32)),
+                        Some(Event::CellFlipped { cell, .. }) => sdl.flip_pixel(cell.x as u32, cell.y as u32),
+                        Some(Event::CellsFlipped { cells, ..}) => cells.iter().for_each(|cell| sdl.flip_pixel(cell.x as u32, cell.y as u32)),
                         Some(Event::TurnComplete { .. }) => dirty = true,
                         Some(Event::AliveCellsCount { completed_turns, .. }) => info!(target: "Test", "{} Avg{:>5} turns/s", gol_event.unwrap(), avg_turns.get(completed_turns)),
                         Some(Event::ImageOutputComplete { .. }) => info!(target: "Test", "{}", gol_event.unwrap()),

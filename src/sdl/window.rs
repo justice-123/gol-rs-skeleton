@@ -69,7 +69,7 @@ impl Window {
         self.pixels[4 * (y * self.width + x) as usize + 3] = color.b;
     }
 
-    pub fn flip_cell(&mut self, x: u32, y: u32) {
+    pub fn flip_pixel(&mut self, x: u32, y: u32) {
         assert!(x < self.width && y < self.height,
             "Cell flipped at ({}, {}) is outside the bounds of the window.",
             x, y

@@ -5,7 +5,7 @@ use colored::Colorize;
 use log::{debug, Level};
 use sdl2::keyboard::Keycode;
 use tokio::{sync::{mpsc::{self, Sender, Receiver}, watch, oneshot}, select};
-use gol_rs::{args::PanicBehaviour, gol::{Params, self, event::{Event, State}}, util::{logger, cell::GolCell}};
+use gol_rs::{args::PanicBehaviour, gol::{Params, self, event::{Event, State}}, util::{logger, cell::CellCoord}};
 use utils::{io::{read_alive_counts, read_alive_cells}, visualise::assert_eq_board, sdl, common::deadline};
 
 mod utils;
@@ -155,8 +155,8 @@ impl Tester {
                 .flat_map(|(y, row)|
                     row.iter().enumerate()
                         .filter(|&(_, &cell)| cell != 0_u8)
-                        .map(move |(x, _)| GolCell { x, y }))
-                .collect::<Vec<GolCell>>();
+                        .map(move |(x, _)| CellCoord { x, y }))
+                .collect::<Vec<CellCoord>>();
             assert_eq_board(self.params, &alive_cells, &expected_alive);
         }
     }
