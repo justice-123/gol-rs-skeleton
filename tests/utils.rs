@@ -27,7 +27,7 @@ pub mod io {
             .flat_map(|(y, row)|
                 row.iter().enumerate()
                     .filter(|&(_, &cell)| cell != 0_u8)
-                    .map(move |(x, _)| CellCoord { x, y }))
+                    .map(move |(x, _)| CellCoord::new(x, y)))
             .collect()
         )
     }

@@ -155,7 +155,7 @@ impl Tester {
                 .flat_map(|(y, row)|
                     row.iter().enumerate()
                         .filter(|&(_, &cell)| cell != 0_u8)
-                        .map(move |(x, _)| CellCoord { x, y }))
+                        .map(move |(x, _)| CellCoord::new(x, y)))
                 .collect::<Vec<CellCoord>>();
             assert_eq_board(self.params, &alive_cells, &expected_alive);
         }
