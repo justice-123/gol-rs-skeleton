@@ -2,12 +2,13 @@ use anyhow::{anyhow, Result, Context};
 use sdl2::EventPump;
 use sdl2::pixels::{PixelFormatEnum, Color};
 use sdl2::render::{Texture, Canvas};
+use sdl2::video::Window as SdlWindow;
 
 pub struct Window {
     width: u32,
     height: u32,
     pitch: u32,
-    canvas: Canvas<sdl2::video::Window>,
+    canvas: Canvas<SdlWindow>,
     texture: Option<Texture>,
     pump: Option<EventPump>,
     pixels: Vec<u8>,
@@ -92,7 +93,6 @@ impl Window {
     }
 
 }
-
 
 impl Drop for Window {
     fn drop(&mut self) {
