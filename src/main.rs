@@ -23,11 +23,16 @@ async fn main() -> Result<()> {
 
     tokio::spawn(sigint(key_presses_tx.clone()));
 
-    let gol = gol::run(args, events_tx, key_presses_rx);
     if !args.headless {
-        try_join!(gol, sdl::r#loop::run(args, events_rx, key_presses_tx))?;
+        try_join!(
+            gol::run(args, events_tx, key_presses_rx),
+            sdl::r#loop::run(args, events_rx, key_presses_tx)
+        )?;
     } else {
-        try_join!(gol, sdl::r#loop::run_headless(events_rx))?;
+        try_join!(
+            gol::run(args, events_tx, key_presses_rx),
+            sdl::r#loop::run_headless(events_rx)
+        )?;
     }
 
     Ok(())

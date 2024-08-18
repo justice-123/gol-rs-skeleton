@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 const BUF_SIZE: usize = 3;
 
 pub struct AvgTurns {
@@ -5,7 +7,7 @@ pub struct AvgTurns {
     last_completed_turns: u32,
     last_called: std::time::Instant,
     buf_turns: [u32; BUF_SIZE],
-    buf_durations: [tokio::time::Duration; BUF_SIZE],
+    buf_durations: [Duration; BUF_SIZE],
 }
 
 impl AvgTurns {
@@ -25,7 +27,8 @@ impl AvgTurns {
         self.last_called = std::time::Instant::now();
         self.last_completed_turns = completed_turns;
         (self.count, _) = self.count.overflowing_add(1);
-        return self.buf_turns.iter().sum::<u32>() / self.buf_durations.iter()
-            .map(|t| t.as_secs_f32().round() as u32).sum::<u32>().clamp(1, u32::MAX);
+        let turns = self.buf_turns.iter().sum::<u32>();
+        let duration = self.buf_durations.iter().sum::<Duration>().as_secs_f32().round() as u32;
+        turns / duration.clamp(1, u32::MAX)
     }
 }

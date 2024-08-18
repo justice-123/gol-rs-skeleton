@@ -71,7 +71,8 @@ impl Window {
     }
 
     pub fn flip_pixel(&mut self, x: u32, y: u32) {
-        assert!(x < self.width && y < self.height,
+        assert!(
+            x < self.width && y < self.height,
             "Cell flipped at ({}, {}) is outside the bounds of the window.",
             x, y
         );
@@ -88,7 +89,8 @@ impl Window {
     pub fn count_pixels(&self) -> u32 {
         self.pixels
             .chunks(4)
-            .filter(|&chunk| chunk.get(0).map_or(false, |&x| x == 0xFF_u8))
+            .filter(|&chunk|
+                chunk.get(0).map_or(false, |&x| x == 0xFF_u8))
             .count() as u32
     }
 

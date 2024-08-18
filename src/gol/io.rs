@@ -26,20 +26,8 @@ struct IoState {
 
 pub async fn start_io(params: Params, channels: IoChannels) {
     let mut io = IoState { params, channels };
-
-    let mut command = io
-        .channels
-        .command
-        .take()
-        .context("Missing IoCommand channel")
-        .unwrap();
-    let idle = io
-        .channels
-        .idle
-        .take()
-        .context("Missing IoIdle channel")
-        .unwrap();
-
+    let mut command = io.channels.command.take().unwrap();
+    let idle = io.channels.idle.take().unwrap();
     'io: loop {
         match command.recv().await {
             Some(IoCommand::IoInput) => io.read_pgm_image().await.unwrap(),
@@ -82,8 +70,7 @@ impl IoState {
                 .input
                 .as_ref()
                 .context("Missing input channel")?
-                .send(CellValue::from(byte))
-                .unwrap();
+                .send(CellValue::from(byte))?;
         }
 
         trace!("File {} input done!", filename);

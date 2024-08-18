@@ -22,18 +22,25 @@ pub async fn run(
 
     let mut event_pump = sdl.take_event_pump()?;
     let mut dirty = false;
-    let mut refresh_interval = tokio::time::interval(Duration::from_secs_f64(1_f64 / args.fps as f64));
+    let mut refresh_interval = tokio::time::interval(
+        Duration::from_secs_f64(1_f64 / args.fps as f64)
+    );
     let mut avg_turns = AvgTurns::new();
 
     'sdl: loop {
         select! {
             _ = refresh_interval.tick() => {
                 match event_pump.poll_event() {
-                    Some(SdlEvent::Quit { .. } | SdlEvent::KeyDown { keycode: Some(Keycode::Escape), ..})  => key_presses.send(Keycode::Q).await?,
-                    Some(SdlEvent::KeyDown { keycode: Some(Keycode::P), .. }) => key_presses.send(Keycode::P).await?,
-                    Some(SdlEvent::KeyDown { keycode: Some(Keycode::S), .. }) => key_presses.send(Keycode::S).await?,
-                    Some(SdlEvent::KeyDown { keycode: Some(Keycode::Q), .. }) => key_presses.send(Keycode::Q).await?,
-                    Some(SdlEvent::KeyDown { keycode: Some(Keycode::K), .. }) => key_presses.send(Keycode::K).await?,
+                    Some(SdlEvent::Quit { .. } | SdlEvent::KeyDown { keycode: Some(Keycode::Escape), ..}) =>
+                        key_presses.send(Keycode::Q).await?,
+                    Some(SdlEvent::KeyDown { keycode: Some(Keycode::P), .. }) =>
+                        key_presses.send(Keycode::P).await?,
+                    Some(SdlEvent::KeyDown { keycode: Some(Keycode::S), .. }) =>
+                        key_presses.send(Keycode::S).await?,
+                    Some(SdlEvent::KeyDown { keycode: Some(Keycode::Q), .. }) =>
+                        key_presses.send(Keycode::Q).await?,
+                    Some(SdlEvent::KeyDown { keycode: Some(Keycode::K), .. }) =>
+                        key_presses.send(Keycode::K).await?,
                     _ => (),
                 }
                 if dirty {
@@ -43,15 +50,27 @@ pub async fn run(
             },
             gol_event = events.recv() => {
                 match gol_event {
-                    Some(Event::CellFlipped { cell, .. }) => sdl.flip_pixel(cell.x as u32, cell.y as u32),
-                    Some(Event::CellsFlipped { cells, ..}) => cells.iter().for_each(|cell| sdl.flip_pixel(cell.x as u32, cell.y as u32)),
-                    Some(Event::TurnComplete { .. }) => dirty = true,
-                    Some(Event::AliveCellsCount { completed_turns, .. }) => info!(target: "Event", "{} Avg{:>5} turns/s", gol_event.unwrap(), avg_turns.get(completed_turns)),
-                    Some(Event::ImageOutputComplete { .. }) => info!(target: "Event", "{}", gol_event.unwrap()),
-                    Some(Event::FinalTurnComplete { .. }) => info!(target: "Event", "{}", gol_event.unwrap()),
+                    Some(Event::CellFlipped { cell, .. }) =>
+                        sdl.flip_pixel(cell.x as u32, cell.y as u32),
+                    Some(Event::CellsFlipped { cells, ..}) =>
+                        cells.iter().for_each(|cell| sdl.flip_pixel(cell.x as u32, cell.y as u32)),
+                    Some(Event::TurnComplete { .. }) => 
+                        dirty = true,
+                    Some(Event::AliveCellsCount { completed_turns, .. }) => 
+                        info!(
+                            target: "Event", "{} Avg{:>5} turns/s",
+                            gol_event.unwrap(),
+                            avg_turns.get(completed_turns)
+                        ),
+                    Some(Event::ImageOutputComplete { .. }) => 
+                        info!(target: "Event", "{}", gol_event.unwrap()),
+                    Some(Event::FinalTurnComplete { .. }) => 
+                        info!(target: "Event", "{}", gol_event.unwrap()),
                     Some(Event::StateChange { new_state, .. }) => {
                         info!(target: "Event", "{}", gol_event.unwrap());
-                        if let State::Quitting = new_state { break 'sdl }
+                        if let State::Quitting = new_state { 
+                            break 'sdl
+                        }
                     },
                     None => break 'sdl,
                 };
@@ -67,12 +86,21 @@ pub async fn run_headless(mut events: Receiver<Event>) -> Result<()> {
     loop {
         let gol_event = events.recv().await;
         match gol_event {
-            Some(Event::AliveCellsCount { completed_turns, .. }) => info!(target: "Event", "{} Avg{:>5} turns/s", gol_event.unwrap(), avg_turns.get(completed_turns)),
-            Some(Event::ImageOutputComplete { .. }) => info!(target: "Event", "{}", gol_event.unwrap()),
-            Some(Event::FinalTurnComplete { .. }) => info!(target: "Event", "{}", gol_event.unwrap()),
+            Some(Event::AliveCellsCount { completed_turns, .. }) =>
+                info!(
+                    target: "Event", "{} Avg{:>5} turns/s",
+                    gol_event.unwrap(),
+                    avg_turns.get(completed_turns)
+                ),
+            Some(Event::ImageOutputComplete { .. }) =>
+                info!(target: "Event", "{}", gol_event.unwrap()),
+            Some(Event::FinalTurnComplete { .. }) =>
+                info!(target: "Event", "{}", gol_event.unwrap()),
             Some(Event::StateChange { new_state, .. }) => {
                 info!(target: "Event", "{}", gol_event.unwrap());
-                if let State::Quitting = new_state { break }
+                if let State::Quitting = new_state {
+                    break
+                }
             },
             None => break,
             _ => (),

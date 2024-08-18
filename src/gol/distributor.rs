@@ -31,5 +31,10 @@ pub fn distributor(params: Params, mut channels: DistributorChannels) {
     io_command.send(IoCommand::IoCheckIdle).unwrap();
     io_idle.blocking_recv();
 
-    events.blocking_send(Event::StateChange { completed_turns: turn, new_state: State::Quitting }).unwrap();
+    events.blocking_send(
+        Event::StateChange {
+            completed_turns: turn,
+            new_state: State::Quitting,
+        }
+    ).unwrap();
 }

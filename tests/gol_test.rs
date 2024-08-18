@@ -15,17 +15,22 @@ async fn main() {
     logger::init(Level::Debug, false, PanicBehaviour::Exit);
     let command = Command::new("Gol")
         .arg(Arg::new("threads")
-                .short('t')
-                .long("threads")
-                .required(false)
-                .default_value("16")
-                .value_parser(value_parser!(usize)))
+            .short('t')
+            .long("threads")
+            .required(false)
+            .default_value("16")
+            .value_parser(value_parser!(usize)))
         .get_matches();
     let threads = command.get_one::<usize>("threads").unwrap().to_owned();
     assert!(threads > 0, "Threads for testing should be greater than 0");
 
     let passed_tests = test_gol(threads).await;
-    println!("\ntest result: {}. {} passed; finished in {:.2}s\n", "ok".green(), passed_tests, start.elapsed().as_secs_f32());
+    println!(
+        "\ntest result: {}. {} passed; finished in {:.2}s\n",
+        "ok".green(),
+        passed_tests,
+        start.elapsed().as_secs_f32()
+    );
     std::process::exit(0);
 }
 
@@ -37,7 +42,12 @@ async fn test_gol(threads: usize) -> usize {
 
     for (width, height) in size {
         for expected_turns in turns {
-            let path = format!("check/images/{}x{}x{}.pgm", width, height, expected_turns);
+            let path = format!(
+                "check/images/{}x{}x{}.pgm",
+                width,
+                height,
+                expected_turns
+            );
             let expected_alive = read_alive_cells(path, width, height).unwrap();
             for thread in 1..=threads {
                 let params = Params {

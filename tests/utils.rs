@@ -64,7 +64,7 @@ pub mod visualise {
     ) {
         let all_match =
             input_cells.len() == expected_cells.len()
-            && expected_cells.iter().all(|cell| input_cells.contains(cell));
+                && expected_cells.iter().all(|cell| input_cells.contains(cell));
 
         if all_match {
             return
@@ -97,9 +97,16 @@ pub mod visualise {
 
     fn fold_strings(items: &[&[String]]) -> String {
         assert!(items.len() > 0, "nothing to fold");
-        assert!(items.iter().all(|item| item.len() == items[0].len()), "items for folding should have same length");
+        assert!(
+            items.iter().all(|item| item.len() == items[0].len()),
+            "items for folding should have same length"
+        );
         (0..items[0].len()).fold(String::new(), |output, i| {
-            format!("{}\n{}", output, items.iter().fold(String::new(), |line, item| line + &item[i]))
+            format!(
+                "{}\n{}",
+                output,
+                items.iter().fold(String::new(), |line, item| line + &item[i])
+            )
         })
     }
 
@@ -111,7 +118,8 @@ pub mod visualise {
         output.append(&mut cells.iter().enumerate()
             .map(|(y, row)|
                 format!("{:2} │{}│  ", y + 1,
-                    row.iter().map(|&cell| if cell.is_dead() { "  " } else { "██" }).collect::<String>()))
+                        row.iter().map(|&cell|
+                            if cell.is_dead() { "  " } else { "██" }).collect::<String>()))
             .collect());
         output.push(format!("   └{}┘  ", (0..width*2).map(|_| "─").collect::<String>()));
         output
@@ -143,7 +151,9 @@ pub mod sdl {
         let fps = 60;
         let mut event_pump = sdl.take_event_pump()?;
         let mut dirty = false;
-        let mut refresh_interval = tokio::time::interval(Duration::from_secs_f64(1_f64 / fps as f64));
+        let mut refresh_interval = tokio::time::interval(
+            Duration::from_secs_f64(1_f64 / fps as f64)
+        );
         let mut avg_turns = AvgTurns::new();
 
         'sdl: loop {
@@ -165,15 +175,23 @@ pub mod sdl {
                         events_forward.send(e).await?;
                     }
                     match gol_event {
-                        Some(Event::CellFlipped { cell, .. }) => sdl.flip_pixel(cell.x as u32, cell.y as u32),
-                        Some(Event::CellsFlipped { cells, ..}) => cells.iter().for_each(|cell| sdl.flip_pixel(cell.x as u32, cell.y as u32)),
-                        Some(Event::TurnComplete { .. }) => dirty = true,
-                        Some(Event::AliveCellsCount { completed_turns, .. }) => info!(target: "Test", "{} Avg{:>5} turns/s", gol_event.unwrap(), avg_turns.get(completed_turns)),
-                        Some(Event::ImageOutputComplete { .. }) => info!(target: "Test", "{}", gol_event.unwrap()),
-                        Some(Event::FinalTurnComplete { .. }) => info!(target: "Test", "{}", gol_event.unwrap()),
+                        Some(Event::CellFlipped { cell, .. }) =>
+                            sdl.flip_pixel(cell.x as u32, cell.y as u32),
+                        Some(Event::CellsFlipped { cells, ..}) =>
+                            cells.iter().for_each(|cell| sdl.flip_pixel(cell.x as u32, cell.y as u32)),
+                        Some(Event::TurnComplete { .. }) =>
+                            dirty = true,
+                        Some(Event::AliveCellsCount { completed_turns, .. }) =>
+                            info!(target: "Test", "{} Avg{:>5} turns/s", gol_event.unwrap(), avg_turns.get(completed_turns)),
+                        Some(Event::ImageOutputComplete { .. }) =>
+                            info!(target: "Test", "{}", gol_event.unwrap()),
+                        Some(Event::FinalTurnComplete { .. }) =>
+                            info!(target: "Test", "{}", gol_event.unwrap()),
                         Some(Event::StateChange { new_state, .. }) => {
                             info!(target: "Test", "{}", gol_event.unwrap());
-                            if let State::Quitting = new_state { break 'sdl }
+                            if let State::Quitting = new_state {
+                                break 'sdl
+                            }
                         },
                         None => break 'sdl,
                     }
@@ -202,12 +220,17 @@ pub mod sdl {
                         events_forward.send(e).await?;
                     }
                     match gol_event {
-                        Some(Event::AliveCellsCount { completed_turns, .. }) => info!(target: "Test", "{} Avg{:>5} turns/s", gol_event.unwrap(), avg_turns.get(completed_turns)),
-                        Some(Event::ImageOutputComplete { .. }) => info!(target: "Test", "{}", gol_event.unwrap()),
-                        Some(Event::FinalTurnComplete { .. }) => info!(target: "Test", "{}", gol_event.unwrap()),
+                        Some(Event::AliveCellsCount { completed_turns, .. }) =>
+                            info!(target: "Test", "{} Avg{:>5} turns/s", gol_event.unwrap(), avg_turns.get(completed_turns)),
+                        Some(Event::ImageOutputComplete { .. }) =>
+                            info!(target: "Test", "{}", gol_event.unwrap()),
+                        Some(Event::FinalTurnComplete { .. }) =>
+                            info!(target: "Test", "{}", gol_event.unwrap()),
                         Some(Event::StateChange { new_state, .. }) => {
                             info!(target: "Test", "{}", gol_event.unwrap());
-                            if let State::Quitting = new_state { break 'sdl }
+                            if let State::Quitting = new_state {
+                                break 'sdl
+                            }
                         },
                         None => break 'sdl,
                         _ => (),

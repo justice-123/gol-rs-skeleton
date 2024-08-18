@@ -51,7 +51,9 @@ where
         io_input: None,
     };
 
-    tokio::task::spawn_blocking(move || distributor(params, distributor_channels));
+    tokio::task::spawn_blocking(move || {
+        distributor(params, distributor_channels);
+    });
     start_io(params, io_channels).await;
     Ok(())
 }

@@ -34,7 +34,10 @@ async fn test_alive() {
 
     tokio::spawn(gol::run(params, events_tx.clone(), key_presses_rx));
 
-    let mut ddl = deadline(Duration::from_secs(5), "No AliveCellsCount event received in 5 seconds");
+    let mut ddl = deadline(
+        Duration::from_secs(5),
+        "No AliveCellsCount event received in 5 seconds"
+    );
 
     let mut succeed = 0;
     loop {
@@ -52,12 +55,23 @@ async fn test_alive() {
 
                 assert_eq!(
                     cells_count, expected,
-                    "At turn {} expected {} alive cells, got {} instead", completed_turns, expected, cells_count
+                    "At turn {} expected {} alive cells, got {} instead",
+                    completed_turns, expected, cells_count
                 );
                 succeed += 1;
-                debug!(target: "Test", "Complete Turns {:<8} Alive Cells {:<8}", completed_turns.to_string().bright_green(), cells_count.to_string().bright_green());
+
+                debug!(
+                    target: "Test",
+                    "Complete Turns {:<8} Alive Cells {:<8}",
+                    completed_turns.to_string().bright_green(),
+                    cells_count.to_string().bright_green()
+                );
+
                 if succeed < 5 {
-                    ddl = deadline(Duration::from_secs(3), "No AliveCellsCount event received in 3 seconds");
+                    ddl = deadline(
+                        Duration::from_secs(3),
+                        "No AliveCellsCount event received in 3 seconds"
+                    );
                 } else {
                     break
                 }
@@ -67,6 +81,12 @@ async fn test_alive() {
             _ => (),
         }
     }
-    println!("\ntest result: {}. {} passed; finished in {:.2}s\n", "ok".green(), 1, start.elapsed().as_secs_f32());
+
+    println!(
+        "\ntest result: {}. {} passed; finished in {:.2}s\n",
+        "ok".green(),
+        1,
+        start.elapsed().as_secs_f32()
+    );
     std::process::exit(0);
 }

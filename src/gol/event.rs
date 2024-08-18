@@ -58,10 +58,14 @@ pub enum Event {
 impl Display for Event {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Event::AliveCellsCount { completed_turns, cells_count  } => write!(f, "Complete Turns {:<8} Alive Cells {:<8}", completed_turns, cells_count),
-            Event::ImageOutputComplete { completed_turns, filename } => write!(f, "Complete Turns {:<8} File {} Output Done", completed_turns, filename),
-            Event::FinalTurnComplete { completed_turns, .. } => write!(f, "Complete Turns {:<8} Final Turn Complete", completed_turns),
-            Event::StateChange { completed_turns, new_state } => write!(f, "Complete Turns {:<8} {}", completed_turns, new_state),
+            Event::AliveCellsCount { completed_turns, cells_count  } =>
+                write!(f, "Complete Turns {:<8} Alive Cells {:<8}", completed_turns, cells_count),
+            Event::ImageOutputComplete { completed_turns, filename } =>
+                write!(f, "Complete Turns {:<8} File {} Output Done", completed_turns, filename),
+            Event::FinalTurnComplete { completed_turns, .. } =>
+                write!(f, "Complete Turns {:<8} Final Turn Complete", completed_turns),
+            Event::StateChange { completed_turns, new_state } =>
+                write!(f, "Complete Turns {:<8} {}", completed_turns, new_state),
             _ => Ok(()),
         }
     }
