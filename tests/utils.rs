@@ -2,7 +2,7 @@
 pub mod io {
     use std::{path::Path, collections::HashMap, fs::File};
     use gol_rs::util::cell::{CellCoord, CellValue};
-    use image::io::Reader;
+    use image::ImageReader;
     use anyhow::Result;
     use serde::Deserialize;
 
@@ -11,7 +11,7 @@ pub mod io {
         width: usize,
         height: usize
     ) -> Result<Vec<CellCoord>> {
-        let pgm = Reader::open(path).unwrap().decode().unwrap();
+        let pgm = ImageReader::open(path)?.decode()?;
         assert_eq!(
             pgm.width(),
             width as u32,
