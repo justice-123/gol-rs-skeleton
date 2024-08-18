@@ -4,7 +4,7 @@ use colored::Colorize;
 use log::{debug, Level};
 use sdl2::keyboard::Keycode;
 use tokio::sync::mpsc;
-use gol_rs::{args::PanicBehaviour, gol::{Params, event::{Event, State}, self}, util::logger};
+use gol_rs::{gol::{Params, event::{Event, State}, self}, util::logger};
 use crate::utils::{visualise::assert_eq_board, io::read_alive_cells};
 
 mod utils;
@@ -12,7 +12,7 @@ mod utils;
 #[tokio::main]
 async fn main() {
     let start = std::time::Instant::now();
-    logger::init(Level::Debug, false, PanicBehaviour::Exit);
+    logger::init(Level::Debug, false);
     let command = Command::new("Gol")
         .arg(Arg::new("threads")
             .short('t')

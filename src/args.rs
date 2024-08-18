@@ -1,5 +1,4 @@
-use std::fmt::Display;
-use clap::{builder::PossibleValue, ArgAction, Parser, ValueEnum};
+use clap::{ArgAction, Parser};
 
 #[derive(Parser, Debug, Clone, Copy)]
 #[clap(disable_help_flag = true)]
@@ -52,48 +51,7 @@ pub struct Args {
 
     #[arg(
         long,
-        default_value_t = false,
-        help = "Enable backtrace for debugging."
-    )]
-    pub backtrace: bool,
-
-    #[arg(
-        long = "panic",
-        value_enum,
-        default_value_t = PanicBehaviour::Exit,
-        help = "Specify behaviour on panic."
-    )]
-    pub panic_behaviour: PanicBehaviour,
-
-    #[arg(
-        long,
         action = ArgAction::HelpLong
     )]
     help: Option<bool>,
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub enum PanicBehaviour {
-    #[default]
-    Exit,
-    Ignore,
-}
-
-impl Display for PanicBehaviour {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl ValueEnum for PanicBehaviour {
-    fn value_variants<'a>() -> &'a [Self] {
-        &[PanicBehaviour::Exit, PanicBehaviour::Ignore]
-    }
-
-    fn to_possible_value(&self) -> Option<PossibleValue> {
-        match self {
-            PanicBehaviour::Exit => Some(PossibleValue::new("exit")),
-            PanicBehaviour::Ignore => Some(PossibleValue::new("ignore")),
-        }
-    }
 }

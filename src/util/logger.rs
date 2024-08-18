@@ -1,21 +1,11 @@
-use backtrace::Backtrace;
-use log::{error, Level};
-use std::panic;
-use colored::Colorize;
-use crate::args::PanicBehaviour;
+use log::Level;
 
-pub fn init(level: Level, backtrace: bool, panic_behaviour: PanicBehaviour) {
-    let level = std::env::var("RUST_LOG").unwrap_or(level.to_string());
+pub fn init(level: Level, backtrace: bool) {
+    let level = std::env::var("RUST_LOG")
+        .unwrap_or(level.to_string());
+    let backtrace = std::env::var("RUST_BACKTRACE")
+        .unwrap_or(if backtrace { "1".to_string() } else { "0".to_string() });
     std::env::set_var("RUST_LOG", &level);
-    if env_logger::try_init().is_ok() {
-        panic::set_hook(Box::new(move |panic| {
-            error!(target: "Main", "{}", panic.to_string().bright_red());
-            if backtrace {
-                error!("Backtrace: \n{:?}", Backtrace::new());
-            }
-            if matches!(panic_behaviour, PanicBehaviour::Exit) {
-                std::process::exit(1);
-            }
-        }));
-    }
+    std::env::set_var("RUST_BACKTRACE", &backtrace);
+    let _ = env_logger::try_init();
 }

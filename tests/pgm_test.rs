@@ -1,6 +1,5 @@
 use clap::{Command, value_parser, Arg};
 use colored::Colorize;
-use gol_rs::args::PanicBehaviour;
 use gol_rs::util::logger;
 use gol_rs::gol::{Params, self, event::{Event, State}};
 use log::{debug, Level};
@@ -14,7 +13,7 @@ mod utils;
 #[tokio::main]
 async fn main() {
     let start = std::time::Instant::now();
-    logger::init(Level::Debug, false, PanicBehaviour::Exit);
+    logger::init(Level::Debug, false);
     let command = Command::new("Gol")
         .arg(Arg::new("threads")
             .short('t')

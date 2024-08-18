@@ -2,6 +2,7 @@ use crate::gol::event::{Event, State};
 use crate::gol::Params;
 use crate::gol::io::IoCommand;
 use crate::util::cell::CellValue;
+use anyhow::Result;
 use tokio::sync::mpsc::{Sender, UnboundedSender, UnboundedReceiver};
 
 pub struct DistributorChannels {
@@ -13,7 +14,10 @@ pub struct DistributorChannels {
     pub io_input: Option<UnboundedReceiver<CellValue>>,
 }
 
-pub fn distributor(params: Params, mut channels: DistributorChannels) {
+pub fn distributor(
+    params: Params,
+    mut channels: DistributorChannels
+) -> Result<()> {
     let events = channels.events.as_ref().unwrap();
     let io_command = channels.io_command.as_ref().unwrap();
     let io_idle = channels.io_idle.as_mut().unwrap();
@@ -28,7 +32,7 @@ pub fn distributor(params: Params, mut channels: DistributorChannels) {
 
 
     // Make sure that the Io has finished any output before exiting.
-    io_command.send(IoCommand::IoCheckIdle).unwrap();
+    io_command.send(IoCommand::IoCheckIdle)?;
     io_idle.blocking_recv();
 
     events.blocking_send(
@@ -36,5 +40,6 @@ pub fn distributor(params: Params, mut channels: DistributorChannels) {
             completed_turns: turn,
             new_state: State::Quitting,
         }
-    ).unwrap();
+    )?;
+    Ok(())
 }

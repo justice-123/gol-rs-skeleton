@@ -5,7 +5,7 @@ use colored::Colorize;
 use log::{debug, Level};
 use sdl2::keyboard::Keycode;
 use tokio::{sync::{mpsc::{self, Sender, Receiver}, watch, oneshot}, select};
-use gol_rs::{args::PanicBehaviour, gol::{self, event::{Event, State}, Params}, util::{cell::{CellCoord, CellValue}, logger}};
+use gol_rs::{gol::{self, event::{Event, State}, Params}, util::{cell::{CellCoord, CellValue}, logger}};
 use utils::{io::{read_alive_counts, read_alive_cells}, visualise::assert_eq_board, sdl, common::deadline};
 
 mod utils;
@@ -18,7 +18,7 @@ async fn main() {
             .value_parser(["headless", "sdl"])
             .default_value("headless"))
         .get_matches();
-    logger::init(Level::Debug, false, PanicBehaviour::Exit);
+    logger::init(Level::Debug, false);
     let headless = matches!(command.get_one::<String>("mode").unwrap().as_str(), "headless");
     let passed_tests = test_sdl(headless).await.unwrap();
     println!(

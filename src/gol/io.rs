@@ -24,18 +24,19 @@ struct IoState {
     channels: IoChannels,
 }
 
-pub async fn start_io(params: Params, channels: IoChannels) {
+pub async fn start_io(params: Params, channels: IoChannels) -> Result<()> {
     let mut io = IoState { params, channels };
     let mut command = io.channels.command.take().unwrap();
     let idle = io.channels.idle.take().unwrap();
     'io: loop {
         match command.recv().await {
-            Some(IoCommand::IoInput) => io.read_pgm_image().await.unwrap(),
-            Some(IoCommand::IoOutput) => io.write_pgm_image().await.unwrap(),
-            Some(IoCommand::IoCheckIdle) => idle.send(true).unwrap(),
+            Some(IoCommand::IoInput) => io.read_pgm_image().await?,
+            Some(IoCommand::IoOutput) => io.write_pgm_image().await?,
+            Some(IoCommand::IoCheckIdle) => idle.send(true)?,
             None => break 'io,
         }
     }
+    Ok(())
 }
 
 impl IoState {
@@ -47,8 +48,7 @@ impl IoState {
             .context("Missing filename channel")?
             .recv()
             .await
-            .context("Sender of IoFilename channel is unexpectedly closed")?;
-
+            .unwrap();
         let path = format!("images/{}.pgm", filename);
         let mut buffer = Vec::new();
         File::open(path).await?.read_to_end(&mut buffer).await?;

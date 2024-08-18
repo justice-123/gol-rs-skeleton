@@ -11,7 +11,7 @@ use gol_rs::util::logger;
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     let args = Args::parse();
-    logger::init(Level::Info, args.backtrace, args.panic_behaviour);
+    logger::init(Level::Info, true);
 
     info!(target: "Main", "{:<10} {}", "Threads", args.threads);
     info!(target: "Main", "{:<10} {}", "Width", args.image_width);

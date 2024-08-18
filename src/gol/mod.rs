@@ -51,10 +51,11 @@ where
         io_input: None,
     };
 
-    tokio::task::spawn_blocking(move || {
-        distributor(params, distributor_channels);
+    let distributor_handle = tokio::task::spawn_blocking(move || {
+        distributor(params, distributor_channels)
     });
-    start_io(params, io_channels).await;
+    start_io(params, io_channels).await?;
+    distributor_handle.await??;
     Ok(())
 }
 
