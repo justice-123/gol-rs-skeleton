@@ -1,11 +1,11 @@
 use std::{collections::HashMap, time::Duration, future::Future};
 use anyhow::Result;
-use clap::{Command, Arg};
+use clap::{value_parser, Arg, Command};
 use colored::Colorize;
 use log::{debug, Level};
 use sdl2::keyboard::Keycode;
 use tokio::{sync::{mpsc::{self, Sender, Receiver}, watch, oneshot}, select};
-use gol_rs::{gol::{self, event::{Event, State}, Params}, util::{cell::{CellCoord, CellValue}, logger}};
+use gol_rs::{args::Args, gol::{self, event::{Event, State}, Params}, util::{cell::{CellCoord, CellValue}, logger}};
 use utils::{io::{read_alive_counts, read_alive_cells}, visualise::assert_eq_board, sdl, common::deadline};
 
 mod utils;
@@ -13,14 +13,17 @@ mod utils;
 #[tokio::main]
 async fn main() {
     let start = std::time::Instant::now();
-    let command = Command::new("Gol")
-        .arg(Arg::new("mode")
-            .value_parser(["headless", "sdl"])
-            .default_value("headless"))
-        .get_matches();
     logger::init(Level::Debug, false);
-    let headless = matches!(command.get_one::<String>("mode").unwrap().as_str(), "headless");
-    let passed_tests = test_sdl(headless).await.unwrap();
+    let command = Command::new("Gol Test")
+        .arg(Arg::new("sdl")
+            .long("sdl")
+            .required(false)
+            .default_value("false")
+            .value_parser(value_parser!(bool)))
+        .get_matches();
+    let sdl = command.get_one::<bool>("sdl").unwrap().to_owned();
+    let args = Args::default().headless(!sdl);
+    let passed_tests = test_sdl(args).await.unwrap();
     println!(
         "\ntest result: {}. {} passed; finished in {:.2}s\n",
         "ok".green(),
@@ -31,14 +34,13 @@ async fn main() {
 }
 
 /// Sdl tests program behaviour on key presses
-async fn test_sdl(headless: bool) -> Result<usize> {
-    let params: Params = Params {
-        turns: 100000000,
-        threads: 8,
-        image_width: 512,
-        image_height: 512,
-    };
-    debug!(target: "Test", "{} - {:?}", "Testing Sdl".cyan(), params);
+async fn test_sdl(args: Args) -> Result<usize> {
+    let args = args
+        .turns(100000000)
+        .threads(8)
+        .image_width(512)
+        .image_height(512);
+    debug!(target: "Test", "{} - {:?}", "Testing Sdl".cyan(), Params::from(args.clone()));
 
     let (key_presses_tx, key_presses_rx) = mpsc::channel(10);
     let (key_presses_forward_tx, key_presses_forward_rx) = mpsc::channel(10);
@@ -46,13 +48,16 @@ async fn test_sdl(headless: bool) -> Result<usize> {
     let (events_forward_tx, events_forward_rx) = mpsc::channel(1000);
     let (gol_done_tx, gol_done_rx) = oneshot::channel();
 
-    let gol = tokio::spawn(async move {
-        gol::run(params, events_tx, key_presses_forward_rx).await.unwrap();
-        Ok(gol_done_tx.send(()))
+    let gol = tokio::spawn({
+        let args = args.clone();
+        async move {
+            gol::run(args, events_tx, key_presses_forward_rx).await.unwrap();
+            Ok(gol_done_tx.send(()))
+        }
     });
     let tester = tokio::spawn(
-        Tester::start(params, key_presses_tx, events_forward_rx, gol_done_rx));
-    let (gol, sdl, tester) = if headless {
+        Tester::start(args.clone(), key_presses_tx, events_forward_rx, gol_done_rx));
+    let (gol, sdl, tester) = if args.headless {
         let sdl = sdl::run_headless(
             events_rx,
             key_presses_rx,
@@ -62,7 +67,7 @@ async fn test_sdl(headless: bool) -> Result<usize> {
         tokio::join!(gol, sdl, tester)
     } else {
         let sdl = sdl::run(
-            params,
+            args,
             "Gol GUI - Test Sdl",
             events_rx,
             key_presses_rx,
@@ -75,7 +80,7 @@ async fn test_sdl(headless: bool) -> Result<usize> {
 }
 
 struct Tester {
-    params: Params,
+    args: Args,
     key_presses: Sender<Keycode>,
     events: Receiver<Event>,
     events_watcher: watch::Receiver<Option<Event>>,
@@ -86,20 +91,20 @@ struct Tester {
 
 impl Tester {
     async fn start(
-        params: Params,
+        args: Args,
         key_presses: Sender<Keycode>,
         events: Receiver<Event>,
         gol_done: oneshot::Receiver<()>,
     ) -> Result<()> {
         let (watcher_tx, watcher_rx) = watch::channel::<Option<Event>>(None);
         let mut tester = Tester {
-            params,
+            args: args.clone(),
             key_presses,
             events,
             events_watcher: watcher_rx,
             turn: 0,
-            world: vec![vec![CellValue::Dead; params.image_width]; params.image_height],
-            alive_map: read_alive_counts(params.image_width as u32, params.image_height as u32)?,
+            world: vec![vec![CellValue::Dead; args.image_width]; args.image_height],
+            alive_map: read_alive_counts(args.image_width as u32, args.image_height as u32)?,
         };
 
         tokio::spawn(tester.test_pause(Duration::from_secs(3)));
@@ -176,14 +181,14 @@ impl Tester {
         if self.turn == 0 || self.turn == 1 || self.turn == 100 {
             let path = format!(
                 "check/images/{}x{}x{}.pgm",
-                self.params.image_width,
-                self.params.image_height,
+                self.args.image_width,
+                self.args.image_height,
                 self.turn
             );
             let expected_alive = read_alive_cells(
                 path,
-                self.params.image_width,
-                self.params.image_height
+                self.args.image_width,
+                self.args.image_height
             ).unwrap();
 
             let alive_cells = self.world.iter().enumerate()
@@ -192,14 +197,14 @@ impl Tester {
                         .filter(|&(_, &cell)| cell.is_alive())
                         .map(move |(x, _)| CellCoord::new(x, y)))
                 .collect::<Vec<CellCoord>>();
-            assert_eq_board(self.params, &alive_cells, &expected_alive);
+            assert_eq_board(self.args.clone(), &alive_cells, &expected_alive);
         }
     }
 
     fn test_output(&self, delay: Duration) -> impl Future<Output = ()> {
         let key_presses = self.key_presses.clone();
         let mut event_watcher = self.events_watcher.clone();
-        let (width, height) = (self.params.image_width, self.params.image_height);
+        let (width, height) = (self.args.image_width, self.args.image_height);
         async move {
             tokio::time::sleep(delay).await;
             debug!(target: "Test", "{}", "Testing image output".cyan());

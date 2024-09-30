@@ -4,7 +4,7 @@ use colored::Colorize;
 use log::{debug, Level};
 use sdl2::keyboard::Keycode;
 use tokio::sync::mpsc;
-use gol_rs::{gol::{Params, event::{Event, State}, self}, util::logger};
+use gol_rs::{args::Args, gol::{self, event::{Event, State}, Params}, util::logger};
 use crate::utils::{visualise::assert_eq_board, io::read_alive_cells};
 
 mod utils;
@@ -13,7 +13,7 @@ mod utils;
 async fn main() {
     let start = std::time::Instant::now();
     logger::init(Level::Debug, false);
-    let command = Command::new("Gol")
+    let command = Command::new("Gol Test")
         .arg(Arg::new("threads")
             .short('t')
             .long("threads")
@@ -23,8 +23,8 @@ async fn main() {
         .get_matches();
     let threads = command.get_one::<usize>("threads").unwrap().to_owned();
     assert!(threads > 0, "Threads for testing should be greater than 0");
-
-    let passed_tests = test_gol(threads).await;
+    let args = Args::default().threads(threads);
+    let passed_tests = test_gol(args).await;
     println!(
         "\ntest result: {}. {} passed; finished in {:.2}s\n",
         "ok".green(),
@@ -35,7 +35,7 @@ async fn main() {
 }
 
 /// Gol tests 16x16, 64x64 and 512x512 images on 0, 1 and 100 turns using 1-16 worker threads.
-async fn test_gol(threads: usize) -> usize {
+async fn test_gol(args: Args) -> usize {
     let mut passed_tests = 0;
     let size = [(16_usize, 16_usize), (64, 64), (512, 512)];
     let turns = [0_usize, 1, 100];
@@ -49,17 +49,17 @@ async fn test_gol(threads: usize) -> usize {
                 expected_turns
             );
             let expected_alive = read_alive_cells(path, width, height).unwrap();
-            for thread in 1..=threads {
-                let params = Params {
-                    turns: expected_turns,
-                    threads: thread,
-                    image_width: width,
-                    image_height: height,
-                };
-                debug!(target: "Test", "{} - {:?}", "Testing Gol".cyan(), params);
+            for thread in 1..=args.threads {
+                let args = args
+                    .clone()
+                    .turns(expected_turns)
+                    .threads(thread)
+                    .image_width(width)
+                    .image_height(height);
+                debug!(target: "Test", "{} - {:?}", "Testing Gol".cyan(), Params::from(args.clone()));
                 let (events_tx, mut events_rx) = mpsc::channel::<Event>(1000);
                 let (_key_presses_tx, key_presses_rx) = mpsc::channel::<Keycode>(10);
-                tokio::spawn(gol::run(params, events_tx, key_presses_rx));
+                tokio::spawn(gol::run(args.clone(), events_tx, key_presses_rx));
                 let mut final_turn_complete = false;
                 loop {
                     match events_rx.recv().await {
@@ -69,10 +69,10 @@ async fn test_gol(threads: usize) -> usize {
                                 completed_turns, expected_turns as u32,
                                 "Expected completed turns is {}, but got {}", expected_turns, completed_turns
                             );
-                            assert_eq_board(params, &alive, &expected_alive);
+                            assert_eq_board(args.clone(), &alive, &expected_alive);
                         },
                         Some(Event::StateChange { new_state: State::Quitting, .. }) if final_turn_complete => break,
-                        None => panic!("No FinalTurnComplete events received {:?}", params),
+                        None => panic!("No FinalTurnComplete events received {:?}", Params::from(args)),
                         _ => (),
                     };
 

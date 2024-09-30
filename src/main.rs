@@ -11,7 +11,7 @@ use gol_rs::util::logger;
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     let args = Args::parse();
-    logger::init(Level::Info, true);
+    logger::init(Level::Info, false);
 
     info!(target: "Main", "{:<10} {}", "Threads", args.threads);
     info!(target: "Main", "{:<10} {}", "Width", args.image_width);
@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
 
     if !args.headless {
         try_join!(
-            gol::run(args, events_tx, key_presses_rx),
+            gol::run(args.clone(), events_tx, key_presses_rx),
             sdl::r#loop::run(args, events_rx, key_presses_tx)
         )?;
     } else {

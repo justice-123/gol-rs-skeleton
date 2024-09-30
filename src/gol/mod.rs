@@ -12,7 +12,7 @@ pub mod event;
 pub mod io;
 
 /// `Params` provides the details of how to run the Game of Life and which image to load.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Debug)]
 pub struct Params {
     pub turns: usize,
     pub threads: usize,
@@ -39,7 +39,7 @@ pub async fn run<P: Into<Params>>(
         input: None,
     };
 
-    tokio::spawn(start_io(params, io_channels));
+    tokio::spawn(start_io(params.clone(), io_channels));
 
     let distributor_channels = DistributorChannels {
         events: Some(events),

@@ -21,6 +21,7 @@ pub fn distributor(
     mut channels: DistributorChannels
 ) -> Result<()> {
     let events = channels.events.as_ref().unwrap();
+    let mut key_presses = channels.key_presses.take().unwrap();
     let io_command = channels.io_command.as_ref().unwrap();
     let io_idle = channels.io_idle.as_mut().unwrap();
 

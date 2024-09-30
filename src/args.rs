@@ -1,6 +1,6 @@
 use clap::{ArgAction, Parser};
 
-#[derive(Parser, Debug, Clone, Copy)]
+#[derive(Clone, Debug, Parser)]
 #[clap(disable_help_flag = true)]
 pub struct Args {
     #[arg(
@@ -54,4 +54,42 @@ pub struct Args {
         action = ArgAction::HelpLong
     )]
     help: Option<bool>,
+}
+
+impl Default for Args {
+    fn default() -> Self {
+        Args::parse_from([""])
+    }
+}
+
+impl Args {
+    pub fn threads(mut self, threads: usize) -> Self {
+        self.threads = threads;
+        self
+    }
+
+    pub fn image_width(mut self, image_width: usize) -> Self {
+        self.image_width = image_width;
+        self
+    }
+
+    pub fn image_height(mut self, image_height: usize) -> Self {
+        self.image_height = image_height;
+        self
+    }
+
+    pub fn fps(mut self, fps: usize) -> Self {
+        self.fps = fps;
+        self
+    }
+
+    pub fn turns(mut self, turns: usize) -> Self {
+        self.turns = turns;
+        self
+    }
+
+    pub fn headless(mut self, headless: bool) -> Self {
+        self.headless = headless;
+        self
+    }
 }

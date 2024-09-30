@@ -1,5 +1,6 @@
 use core::panic;
 use std::time::Duration;
+use gol_rs::args::Args;
 use log::{debug, Level};
 use tokio::sync::mpsc;
 use colored::Colorize;
@@ -20,18 +21,18 @@ async fn main() {
 /// You can manually check your counts by looking at CSVs provided in check/alive
 async fn test_alive() {
     let start = std::time::Instant::now();
-    let params = Params {
-        turns: 100000000,
-        threads: 1,
-        image_width: 512,
-        image_height: 512,
-    };
-    debug!(target: "Test", "{} - {:?}", "Testing Alive Count".cyan(), params);
+    let args = Args::default()
+        .turns(100000000)
+        .threads(1)
+        .image_width(512)
+        .image_height(512);
+
+    debug!(target: "Test", "{} - {:?}", "Testing Alive Count".cyan(), Params::from(args.clone()));
     let alive_map = read_alive_counts(512, 512).unwrap();
     let (_key_presses_tx, key_presses_rx) = mpsc::channel(10);
     let (events_tx, mut events_rx) = mpsc::channel(1000);
 
-    tokio::spawn(gol::run(params, events_tx.clone(), key_presses_rx));
+    tokio::spawn(gol::run(args, events_tx.clone(), key_presses_rx));
 
     let mut ddl = deadline(
         Duration::from_secs(5),
