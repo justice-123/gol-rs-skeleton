@@ -3,6 +3,7 @@ use crate::gol::distributor::{DistributorChannels, distributor};
 use crate::gol::event::Event;
 use crate::gol::io::{start_io, IoChannels};
 use anyhow::Result;
+use log::error;
 use sdl2::keyboard::Keycode;
 use tokio::sync::mpsc::{Sender, Receiver, self};
 
@@ -19,16 +20,12 @@ pub struct Params {
     pub image_height: usize,
 }
 
-pub async fn run<P>(
+pub async fn run<P: Into<Params>>(
     params: P,
     events: Sender<Event>,
     key_presses: Receiver<Keycode>,
-) -> Result<()>
-where
-    P: Into<Params> + Copy + Send + Sync + 'static
-{
+) -> Result<()> {
     let params: Params = params.into();
-
     // TODO: Put the missing channels in here.
 
     let (io_command_tx, io_command_rx) = mpsc::unbounded_channel();
@@ -42,8 +39,11 @@ where
         input: None,
     };
 
+    tokio::spawn(start_io(params, io_channels));
+
     let distributor_channels = DistributorChannels {
         events: Some(events),
+        key_presses: Some(key_presses),
         io_command: Some(io_command_tx),
         io_idle: Some(io_idle_rx),
         io_filename: None,
@@ -51,11 +51,9 @@ where
         io_input: None,
     };
 
-    let distributor_handle = tokio::task::spawn_blocking(move || {
-        distributor(params, distributor_channels)
-    });
-    start_io(params, io_channels).await?;
-    distributor_handle.await??;
+    tokio::task::spawn_blocking(move || distributor(params, distributor_channels))
+        .await?.err().map(|e| error!(target: "Distributor", "{}", e));
+
     Ok(())
 }
 

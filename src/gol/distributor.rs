@@ -3,10 +3,12 @@ use crate::gol::Params;
 use crate::gol::io::IoCommand;
 use crate::util::cell::CellValue;
 use anyhow::Result;
-use tokio::sync::mpsc::{Sender, UnboundedSender, UnboundedReceiver};
+use sdl2::keyboard::Keycode;
+use tokio::sync::mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender};
 
 pub struct DistributorChannels {
     pub events: Option<Sender<Event>>,
+    pub key_presses: Option<Receiver<Keycode>>,
     pub io_command: Option<UnboundedSender<IoCommand>>,
     pub io_idle: Option<UnboundedReceiver<bool>>,
     pub io_filename: Option<UnboundedSender<String>>,
@@ -25,6 +27,8 @@ pub fn distributor(
     // TODO: Create a 2D vector to store the world.
 
     let turn = 0;
+    events.blocking_send(
+        Event::StateChange { completed_turns: turn, new_state: State::Executing })?;
 
     // TODO: Execute all turns of the Game of Life.
 
@@ -36,10 +40,6 @@ pub fn distributor(
     io_idle.blocking_recv();
 
     events.blocking_send(
-        Event::StateChange {
-            completed_turns: turn,
-            new_state: State::Quitting,
-        }
-    )?;
+        Event::StateChange { completed_turns: turn, new_state: State::Quitting })?;
     Ok(())
 }

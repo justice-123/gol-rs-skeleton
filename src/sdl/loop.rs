@@ -54,21 +54,21 @@ pub async fn run(
                         sdl.flip_pixel(cell.x as u32, cell.y as u32),
                     Some(Event::CellsFlipped { cells, ..}) =>
                         cells.iter().for_each(|cell| sdl.flip_pixel(cell.x as u32, cell.y as u32)),
-                    Some(Event::TurnComplete { .. }) => 
+                    Some(Event::TurnComplete { .. }) =>
                         dirty = true,
-                    Some(Event::AliveCellsCount { completed_turns, .. }) => 
+                    Some(Event::AliveCellsCount { completed_turns, .. }) =>
                         info!(
                             target: "Event", "{} Avg{:>5} turns/s",
                             gol_event.unwrap(),
                             avg_turns.get(completed_turns)
                         ),
-                    Some(Event::ImageOutputComplete { .. }) => 
+                    Some(Event::ImageOutputComplete { .. }) =>
                         info!(target: "Event", "{}", gol_event.unwrap()),
-                    Some(Event::FinalTurnComplete { .. }) => 
+                    Some(Event::FinalTurnComplete { .. }) =>
                         info!(target: "Event", "{}", gol_event.unwrap()),
                     Some(Event::StateChange { new_state, .. }) => {
                         info!(target: "Event", "{}", gol_event.unwrap());
-                        if let State::Quitting = new_state { 
+                        if let State::Quitting = new_state {
                             break 'sdl
                         }
                     },
