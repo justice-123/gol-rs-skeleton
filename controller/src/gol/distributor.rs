@@ -5,49 +5,50 @@ use crate::gol::distributor::controller_handler_client::ControllerHandlerClient;
 use crate::util::cell::CellValue;
 use crate::util::traits::AsBytes;
 use anyhow::Result;
-use log::info;
-use tokio::sync::mpsc::{Sender, UnboundedSender, UnboundedReceiver};
-
+use flume::{Receiver, Sender};
+use sdl2::keyboard::Keycode;
 
 pub struct DistributorChannels {
     pub events: Option<Sender<Event>>,
-    pub io_command: Option<UnboundedSender<IoCommand>>,
-    pub io_idle: Option<UnboundedReceiver<bool>>,
-    pub io_filename: Option<UnboundedSender<String>>,
-    pub io_output: Option<UnboundedSender<CellValue>>,
-    pub io_input: Option<UnboundedReceiver<CellValue>>,
+    pub key_presses: Option<Receiver<Keycode>>,
+    pub io_command: Option<Sender<IoCommand>>,
+    pub io_idle: Option<Receiver<bool>>,
+    pub io_filename: Option<Sender<String>>,
+    pub io_input: Option<Receiver<CellValue>>,
+    pub io_output: Option<Sender<CellValue>>,
 }
+
+tonic::include_proto!("gol_proto");
 
 pub async fn remote_distributor(
     params: Params,
     mut channels: DistributorChannels
 ) -> Result<()> {
-    let events = channels.events.as_ref().unwrap();
-    let io_command = channels.io_command.as_ref().unwrap();
-    let io_idle = channels.io_idle.as_mut().unwrap();
+    let events = channels.events.take().unwrap();
+    let key_presses = channels.key_presses.take().unwrap();
+    let io_command = channels.io_command.take().unwrap();
+    let io_idle = channels.io_idle.take().unwrap();
 
     let turn = 0;
 
-    // Example for tonic RPC
-    example_rpc_call().await?;
+    // Example for tonic gRPC
+    example_rpc_call(params.clone().server_addr).await?;
 
-    io_command.send(IoCommand::IoCheckIdle)?;
-    io_idle.recv().await;
-    events.send(
-        Event::StateChange {
-            completed_turns: turn,
-            new_state: State::Quitting,
-        }
-    ).await?;
+    io_command.send_async(IoCommand::IoCheckIdle).await?;
+    io_idle.recv_async().await?;
+    events.send_async(
+        Event::StateChange { completed_turns: turn, new_state: State::Quitting }).await?;
     Ok(())
 }
 
-
 // Example for tonic RPC
-tonic::include_proto!("gol_proto");
+async fn example_rpc_call(server_addr: String) -> Result<()> {
 
-async fn example_rpc_call() -> Result<()> {
-    let mut client = ControllerHandlerClient::connect("http://127.0.0.1:8030").await?;
+    // You can define the default server address in args::DEFAULT_SERVER_ADDR
+    // or passing the args by typing `cargo run --release -- --server_addr "127.0.0.1:8030"`
+    log::info!(target: "Distributor", "server_addr: {}", server_addr);
+
+    let mut client = ControllerHandlerClient::connect(format!("http://{}", server_addr)).await?;
     // Create a 3x3 world
     let world =
         vec![vec![CellValue::Alive, CellValue::Alive, CellValue::Alive],
@@ -55,7 +56,7 @@ async fn example_rpc_call() -> Result<()> {
              vec![CellValue::Alive, CellValue::Alive, CellValue::Alive]];
 
     // Convert Vec<Vec<CellValue>> to Vec<u8> (bytes)
-    let bytes = world.iter().flat_map(|row| row.as_bytes().to_vec()).collect();
+    let bytes = world.iter().flat_map(|row| row.as_bytes()).copied().collect();
     assert_eq!(bytes, vec![255, 255, 255, 0, 0, 0, 255, 255, 255]);
 
     // Push the world to the server and receive the response (number of alive cells) by RPC call
@@ -72,13 +73,13 @@ async fn example_rpc_call() -> Result<()> {
     match response {
         Ok(response) => {
             let msg = response.into_inner();
-            info!("response: {:?}", msg);
+            log::info!(target: "Distributor", "response: {:?}", msg);
             assert_eq!(
                 msg.cells_count as usize,
                 world.iter().flatten().filter(|cell| cell.is_alive()).count()
             );
         },
-        Err(e) => log::error!("Server error: {}", e),
+        Err(e) => log::error!(target: "Distributor", "Server error: {}", e),
     }
 
     // Another example of closing the server by RPC call

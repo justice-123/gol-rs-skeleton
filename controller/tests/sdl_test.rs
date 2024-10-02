@@ -1,11 +1,12 @@
 use std::{collections::HashMap, time::Duration, future::Future};
 use anyhow::Result;
-use clap::{Command, Arg};
+use clap::{value_parser, Arg, ArgAction, Command};
 use colored::Colorize;
-use log::{debug, Level};
+use flume::{Receiver, Sender};
+use gol_rs_controller::{args::{self, Args}, gol::{self, event::{Event, State}, Params}, util::{cell::{CellCoord, CellValue}, logger}};
+use log::Level;
 use sdl2::keyboard::Keycode;
-use tokio::{sync::{mpsc::{self, Sender, Receiver}, watch, oneshot}, select};
-use gol_rs::{gol::{self, event::{Event, State}, Params}, util::{cell::{CellCoord, CellValue}, logger}};
+use tokio::{sync::{watch, oneshot}, select};
 use utils::{io::{read_alive_counts, read_alive_cells}, visualise::assert_eq_board, sdl, common::deadline};
 
 mod utils;
@@ -13,14 +14,26 @@ mod utils;
 #[tokio::main]
 async fn main() {
     let start = std::time::Instant::now();
-    let command = Command::new("Gol")
-        .arg(Arg::new("mode")
-            .value_parser(["headless", "sdl"])
-            .default_value("headless"))
-        .get_matches();
     logger::init(Level::Debug, false);
-    let headless = matches!(command.get_one::<String>("mode").unwrap().as_str(), "headless");
-    let passed_tests = test_sdl(headless).await.unwrap();
+    let command = Command::new("Gol Test")
+        .arg(Arg::new("sdl")
+            .long("sdl")
+            .required(false)
+            .default_value("false")
+            .action(ArgAction::SetTrue)
+            .value_parser(value_parser!(bool)))
+        .arg(Arg::new("server_addr")
+            .long("server_addr")
+            .required(false)
+            .default_value(args::DEFAULT_SERVER_ADDR)
+            .value_parser(value_parser!(String)))
+        .get_matches();
+    let sdl = command.get_one::<bool>("sdl").unwrap().to_owned();
+    let server_addr = command.get_one::<String>("server_addr").unwrap().to_owned();
+    let args = Args::default().headless(!sdl).server_addr(server_addr);
+
+    let passed_tests = test_sdl(args).await.unwrap();
+
     println!(
         "\ntest result: {}. {} passed; finished in {:.2}s\n",
         "ok".green(),
@@ -31,28 +44,31 @@ async fn main() {
 }
 
 /// Sdl tests program behaviour on key presses
-async fn test_sdl(headless: bool) -> Result<usize> {
-    let params: Params = Params {
-        turns: 100000000,
-        threads: 8,
-        image_width: 512,
-        image_height: 512,
-    };
-    debug!(target: "Test", "{} - {:?}", "Testing Sdl".cyan(), params);
+async fn test_sdl(args: Args) -> Result<usize> {
+    let args = args
+        .turns(100000000)
+        .threads(8)
+        .image_width(512)
+        .image_height(512);
+    let passed_tests = 1;
+    log::debug!(target: "Test", "{} - {:?}", "Testing Sdl".cyan(), Params::from(args.clone()));
 
-    let (key_presses_tx, key_presses_rx) = mpsc::channel(10);
-    let (key_presses_forward_tx, key_presses_forward_rx) = mpsc::channel(10);
-    let (events_tx, events_rx) = mpsc::channel(1000);
-    let (events_forward_tx, events_forward_rx) = mpsc::channel(1000);
+    let (key_presses_tx, key_presses_rx) = flume::bounded::<Keycode>(10);
+    let (key_presses_forward_tx, key_presses_forward_rx) = flume::bounded::<Keycode>(10);
+    let (events_tx, events_rx) = flume::bounded::<Event>(1000);
+    let (events_forward_tx, events_forward_rx) = flume::bounded::<Event>(1000);
     let (gol_done_tx, gol_done_rx) = oneshot::channel();
 
-    let gol = tokio::spawn(async move {
-        gol::run(params, events_tx, key_presses_forward_rx).await.unwrap();
-        Ok(gol_done_tx.send(()))
+    let gol = tokio::spawn({
+        let args = args.clone();
+        async move {
+            gol::run(args, events_tx, key_presses_forward_rx).await.unwrap();
+            Ok(gol_done_tx.send(()))
+        }
     });
     let tester = tokio::spawn(
-        Tester::start(params, key_presses_tx, events_forward_rx, gol_done_rx));
-    let (gol, sdl, tester) = if headless {
+        Tester::start(args.clone(), key_presses_tx, events_forward_rx, gol_done_rx));
+    let (gol, sdl, tester) = if args.headless {
         let sdl = sdl::run_headless(
             events_rx,
             key_presses_rx,
@@ -62,7 +78,7 @@ async fn test_sdl(headless: bool) -> Result<usize> {
         tokio::join!(gol, sdl, tester)
     } else {
         let sdl = sdl::run(
-            params,
+            args,
             "Gol GUI - Test Sdl",
             events_rx,
             key_presses_rx,
@@ -71,11 +87,11 @@ async fn test_sdl(headless: bool) -> Result<usize> {
         );
         tokio::join!(gol, sdl, tester)
     };
-    sdl.and(gol?).and(tester?).and(Ok(1))
+    sdl.and(gol?).and(tester?).and(Ok(passed_tests))
 }
 
 struct Tester {
-    params: Params,
+    args: Args,
     key_presses: Sender<Keycode>,
     events: Receiver<Event>,
     events_watcher: watch::Receiver<Option<Event>>,
@@ -86,20 +102,20 @@ struct Tester {
 
 impl Tester {
     async fn start(
-        params: Params,
+        args: Args,
         key_presses: Sender<Keycode>,
         events: Receiver<Event>,
         gol_done: oneshot::Receiver<()>,
     ) -> Result<()> {
         let (watcher_tx, watcher_rx) = watch::channel::<Option<Event>>(None);
         let mut tester = Tester {
-            params,
+            args: args.clone(),
             key_presses,
             events,
             events_watcher: watcher_rx,
             turn: 0,
-            world: vec![vec![CellValue::Dead; params.image_width]; params.image_height],
-            alive_map: read_alive_counts(params.image_width as u32, params.image_height as u32)?,
+            world: vec![vec![CellValue::Dead; args.image_width]; args.image_height],
+            alive_map: read_alive_counts(args.image_width as u32, args.image_height as u32)?,
         };
 
         tokio::spawn(tester.test_pause(Duration::from_secs(3)));
@@ -115,21 +131,21 @@ impl Tester {
 
         loop {
             select! {
-                gol_event = tester.events.recv() => {
+                gol_event = tester.events.recv_async() => {
                     match gol_event {
-                        Some(Event::CellFlipped { completed_turns, cell }) => {
+                        Ok(Event::CellFlipped { completed_turns, cell }) => {
                             cell_flipped_received = true;
                             assert!(completed_turns == tester.turn || completed_turns == tester.turn + 1,
                                 "Expected completed {} turns, got {} instead", tester.turn, completed_turns);
                             tester.world[cell.y][cell.x].flip();
                         },
-                        Some(Event::CellsFlipped { completed_turns, cells }) => {
+                        Ok(Event::CellsFlipped { completed_turns, cells }) => {
                             cell_flipped_received = true;
                             assert!(completed_turns == tester.turn || completed_turns == tester.turn + 1,
                                 "Expected completed {} turns, got {} instead", tester.turn, completed_turns);
                             cells.iter().for_each(|cell| tester.world[cell.y][cell.x].flip());
                         },
-                        Some(Event::TurnComplete { completed_turns }) => {
+                        Ok(Event::TurnComplete { completed_turns }) => {
                             turn_complete_received = true;
                             tester.turn += 1;
                             assert_eq!(completed_turns, tester.turn,
@@ -137,11 +153,11 @@ impl Tester {
                             tester.test_alive();
                             tester.test_gol();
                         },
-                        e @ Some(Event::ImageOutputComplete { .. }) => watcher_tx.send(e)?,
-                        e @ Some(Event::StateChange { .. }) => watcher_tx.send(e)?,
-                        e @ Some(Event::FinalTurnComplete { .. }) => watcher_tx.send(e)?,
-                        Some(_) => (),
-                        None => {
+                        e @ Ok(Event::ImageOutputComplete { .. }) => watcher_tx.send(e.ok())?,
+                        e @ Ok(Event::StateChange { .. }) => watcher_tx.send(e.ok())?,
+                        e @ Ok(Event::FinalTurnComplete { .. }) => watcher_tx.send(e.ok())?,
+                        Ok(_) => (),
+                        Err(_) => {
                             if !cell_flipped_received {
                                 panic!("No CellFlipped events received");
                             }
@@ -176,14 +192,14 @@ impl Tester {
         if self.turn == 0 || self.turn == 1 || self.turn == 100 {
             let path = format!(
                 "check/images/{}x{}x{}.pgm",
-                self.params.image_width,
-                self.params.image_height,
+                self.args.image_width,
+                self.args.image_height,
                 self.turn
             );
             let expected_alive = read_alive_cells(
                 path,
-                self.params.image_width,
-                self.params.image_height
+                self.args.image_width,
+                self.args.image_height
             ).unwrap();
 
             let alive_cells = self.world.iter().enumerate()
@@ -192,18 +208,18 @@ impl Tester {
                         .filter(|&(_, &cell)| cell.is_alive())
                         .map(move |(x, _)| CellCoord::new(x, y)))
                 .collect::<Vec<CellCoord>>();
-            assert_eq_board(self.params, &alive_cells, &expected_alive);
+            assert_eq_board(self.args.clone(), &alive_cells, &expected_alive);
         }
     }
 
     fn test_output(&self, delay: Duration) -> impl Future<Output = ()> {
         let key_presses = self.key_presses.clone();
         let mut event_watcher = self.events_watcher.clone();
-        let (width, height) = (self.params.image_width, self.params.image_height);
+        let (width, height) = (self.args.image_width, self.args.image_height);
         async move {
             tokio::time::sleep(delay).await;
-            debug!(target: "Test", "{}", "Testing image output".cyan());
-            key_presses.send(Keycode::S).await.unwrap();
+            log::debug!(target: "Test", "{}", "Testing image output".cyan());
+            key_presses.send_async(Keycode::S).await.unwrap();
             tokio::time::timeout(Duration::from_secs(4), async {
                 let event = event_watcher.wait_for(|e|
                     matches!(e, Some(Event::ImageOutputComplete { .. }))
@@ -227,8 +243,8 @@ impl Tester {
         let test_output = self.test_output(Duration::from_secs(2));
         async move {
             tokio::time::sleep(delay).await;
-            debug!(target: "Test", "{}", "Testing Pause key pressed".cyan());
-            key_presses.send(Keycode::P).await.unwrap();
+            log::debug!(target: "Test", "{}", "Testing Pause key pressed".cyan());
+            key_presses.send_async(Keycode::P).await.unwrap();
             tokio::time::timeout(Duration::from_secs(2), async {
                 event_watcher.wait_for(|e|
                     matches!(e, Some(Event::StateChange { new_state: State::Pause, .. }))).await.unwrap()
@@ -237,8 +253,8 @@ impl Tester {
             test_output.await;
 
             tokio::time::sleep(Duration::from_secs(2)).await;
-            debug!(target: "Test", "{}", "Testing Pause key pressed again".cyan());
-            key_presses.send(Keycode::P).await.unwrap();
+            log::debug!(target: "Test", "{}", "Testing Pause key pressed again".cyan());
+            key_presses.send_async(Keycode::P).await.unwrap();
             tokio::time::timeout(Duration::from_secs(2), async {
                 event_watcher.wait_for(|e|
                     matches!(e, Some(Event::StateChange { new_state: State::Executing, .. }))).await.unwrap();
@@ -251,8 +267,8 @@ impl Tester {
         let mut event_watcher = self.events_watcher.clone();
         async move {
             tokio::time::sleep(delay).await;
-            debug!(target: "Test", "{}", "Testing Quit key pressed".cyan());
-            key_presses.send(Keycode::Q).await.unwrap();
+            log::debug!(target: "Test", "{}", "Testing Quit key pressed".cyan());
+            key_presses.send_async(Keycode::Q).await.unwrap();
             tokio::time::timeout(Duration::from_secs(2), async {
                 event_watcher.wait_for(|e|
                     matches!(e, Some(Event::FinalTurnComplete { .. }))).await.unwrap();

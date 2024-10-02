@@ -1,7 +1,7 @@
 #[allow(dead_code)]
 pub mod io {
     use std::{path::Path, collections::HashMap, fs::File};
-    use gol_rs::util::cell::{CellCoord, CellValue};
+    use gol_rs_controller::util::cell::{CellCoord, CellValue};
     use image::ImageReader;
     use anyhow::Result;
     use serde::Deserialize;
@@ -54,11 +54,10 @@ pub mod io {
 
 #[allow(dead_code)]
 pub mod visualise {
-    use gol_rs::{gol::Params, util::cell::{CellCoord, CellValue}};
-    use log::info;
+    use gol_rs_controller::{args::Args, gol::Params, util::cell::{CellCoord, CellValue}};
 
     pub fn assert_eq_board(
-        params: Params,
+        args: Args,
         input_cells: &[CellCoord],
         expected_cells: &[CellCoord]
     ) {
@@ -70,8 +69,8 @@ pub mod visualise {
             return
         }
 
-        if params.image_width == 16 && params.image_height == 16 {
-            let mut input_matrix = vec![vec![CellValue::Dead; params.image_width]; params.image_height];
+        if args.image_width == 16 && args.image_height == 16 {
+            let mut input_matrix = vec![vec![CellValue::Dead; args.image_width]; args.image_height];
             let mut expected_matrix = input_matrix.clone();
             input_cells.iter().for_each(|cell| input_matrix[cell.y][cell.x] = CellValue::Alive);
             expected_cells.iter().for_each(|cell| expected_matrix[cell.y][cell.x] = CellValue::Alive);
@@ -80,9 +79,9 @@ pub mod visualise {
             input.insert(0, get_centered_banner(39, "Your result", ' '));
             expected.insert(0, get_centered_banner(39, "Expected result", ' '));
             let output = fold_strings(&[&input, &expected]);
-            info!(target: "Test", "{}", output);
+            log::info!(target: "Test", "{}", output);
         }
-        panic!("Test Failed - {:?}", params);
+        panic!("Test Failed - {:?}", Params::from(args));
     }
 
     fn get_centered_banner(
@@ -130,23 +129,23 @@ pub mod visualise {
 pub mod sdl {
     use std::time::Duration;
     use anyhow::Result;
-    use log::info;
+    use flume::{Receiver, Sender};
     use sdl2::keyboard::Keycode;
-    use gol_rs::{gol::{Params, event::{Event, State}}, sdl::window::Window, util::avgturns::AvgTurns};
-    use tokio::{sync::mpsc::{Sender, Receiver}, select};
+    use gol_rs_controller::{args::Args, gol::event::{Event, State}, sdl::window::Window, util::avgturns::AvgTurns};
+    use tokio::select;
 
     pub async fn run<T: AsRef<str>>(
-        params: Params,
+        args: Args,
         title: T,
-        mut events: Receiver<Event>,
-        mut key_presses: Receiver<Keycode>,
+        events: Receiver<Event>,
+        key_presses: Receiver<Keycode>,
         events_forward: Sender<Event>,
         key_presses_forward: Sender<Keycode>,
     ) -> Result<()> {
         let mut sdl = Window::new(
             title,
-            params.image_width as u32,
-            params.image_height as u32,
+            args.image_width as u32,
+            args.image_height as u32,
         )?;
         let fps = 60;
         let mut event_pump = sdl.take_event_pump()?;
@@ -165,35 +164,35 @@ pub mod sdl {
                         dirty = false;
                     }
                 },
-                key = key_presses.recv() => {
-                    if let Some(key) = key {
-                        key_presses_forward.send(key).await?;
+                key = key_presses.recv_async() => {
+                    if let Ok(key) = key {
+                        key_presses_forward.send_async(key).await?;
                     }
                 },
-                gol_event = events.recv() => {
-                    if let Some(e) = gol_event.clone() {
-                        events_forward.send(e).await?;
+                gol_event = events.recv_async() => {
+                    if let Ok(e) = &gol_event {
+                        events_forward.send_async(e.clone()).await?;
                     }
                     match gol_event {
-                        Some(Event::CellFlipped { cell, .. }) =>
+                        Ok(Event::CellFlipped { cell, .. }) =>
                             sdl.flip_pixel(cell.x as u32, cell.y as u32),
-                        Some(Event::CellsFlipped { cells, ..}) =>
+                        Ok(Event::CellsFlipped { cells, ..}) =>
                             cells.iter().for_each(|cell| sdl.flip_pixel(cell.x as u32, cell.y as u32)),
-                        Some(Event::TurnComplete { .. }) =>
+                        Ok(Event::TurnComplete { .. }) =>
                             dirty = true,
-                        Some(Event::AliveCellsCount { completed_turns, .. }) =>
-                            info!(target: "Test", "{} Avg{:>5} turns/s", gol_event.unwrap(), avg_turns.get(completed_turns)),
-                        Some(Event::ImageOutputComplete { .. }) =>
-                            info!(target: "Test", "{}", gol_event.unwrap()),
-                        Some(Event::FinalTurnComplete { .. }) =>
-                            info!(target: "Test", "{}", gol_event.unwrap()),
-                        Some(Event::StateChange { new_state, .. }) => {
-                            info!(target: "Test", "{}", gol_event.unwrap());
+                        Ok(Event::AliveCellsCount { completed_turns, .. }) =>
+                            log::info!(target: "Test", "{} Avg{:>5} turns/s", gol_event?, avg_turns.get(completed_turns)),
+                        Ok(Event::ImageOutputComplete { .. }) =>
+                            log::info!(target: "Test", "{}", gol_event?),
+                        Ok(Event::FinalTurnComplete { .. }) =>
+                            log::info!(target: "Test", "{}", gol_event?),
+                        Ok(Event::StateChange { new_state, .. }) => {
+                            log::info!(target: "Test", "{}", gol_event?);
                             if let State::Quitting = new_state {
                                 break 'sdl
                             }
                         },
-                        None => break 'sdl,
+                        Err(_) => break 'sdl,
                     }
                 },
             }
@@ -202,37 +201,37 @@ pub mod sdl {
     }
 
     pub async fn run_headless(
-        mut events: Receiver<Event>,
-        mut key_presses: Receiver<Keycode>,
+        events: Receiver<Event>,
+        key_presses: Receiver<Keycode>,
         events_forward: Sender<Event>,
         key_presses_forward: Sender<Keycode>,
     ) -> Result<()> {
         let mut avg_turns = AvgTurns::new();
         'sdl: loop {
             select! {
-                key_presses = key_presses.recv() => {
-                    if let Some(key) = key_presses {
-                        key_presses_forward.send(key).await?;
+                key_presses = key_presses.recv_async() => {
+                    if let Ok(key) = key_presses {
+                        key_presses_forward.send_async(key).await?;
                     }
                 },
-                gol_event = events.recv() => {
-                    if let Some(e) = gol_event.clone() {
-                        events_forward.send(e).await?;
+                gol_event = events.recv_async() => {
+                    if let Ok(e) = &gol_event {
+                        events_forward.send_async(e.clone()).await?;
                     }
                     match gol_event {
-                        Some(Event::AliveCellsCount { completed_turns, .. }) =>
-                            info!(target: "Test", "{} Avg{:>5} turns/s", gol_event.unwrap(), avg_turns.get(completed_turns)),
-                        Some(Event::ImageOutputComplete { .. }) =>
-                            info!(target: "Test", "{}", gol_event.unwrap()),
-                        Some(Event::FinalTurnComplete { .. }) =>
-                            info!(target: "Test", "{}", gol_event.unwrap()),
-                        Some(Event::StateChange { new_state, .. }) => {
-                            info!(target: "Test", "{}", gol_event.unwrap());
+                        Ok(Event::AliveCellsCount { completed_turns, .. }) =>
+                            log::info!(target: "Test", "{} Avg{:>5} turns/s", gol_event?, avg_turns.get(completed_turns)),
+                        Ok(Event::ImageOutputComplete { .. }) =>
+                            log::info!(target: "Test", "{}", gol_event?),
+                        Ok(Event::FinalTurnComplete { .. }) =>
+                            log::info!(target: "Test", "{}", gol_event?),
+                        Ok(Event::StateChange { new_state, .. }) => {
+                            log::info!(target: "Test", "{}", gol_event?);
                             if let State::Quitting = new_state {
                                 break 'sdl
                             }
                         },
-                        None => break 'sdl,
+                        Err(_) => break 'sdl,
                         _ => (),
                     }
                 },
@@ -245,16 +244,16 @@ pub mod sdl {
 #[allow(dead_code)]
 pub mod common {
     use std::{time::Duration, fmt::Display};
-    use colored::Colorize;
     use tokio::task::JoinHandle;
 
     pub fn deadline<T>(ddl: Duration, msg: T) -> JoinHandle<()>
     where
-        T: AsRef<str> + Display + Send + 'static + Colorize
+        T: AsRef<str> + Display + Send + 'static
     {
         tokio::spawn(async move {
             tokio::time::sleep(ddl).await;
-            panic!("{}", msg.red());
+            log::error!(target: "Test", "{}", msg);
+            std::process::exit(1);
         })
     }
 }

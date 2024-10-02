@@ -1,6 +1,8 @@
 use clap::{ArgAction, Parser};
 
-#[derive(Parser, Debug, Clone, Copy)]
+pub const DEFAULT_SERVER_ADDR: &str = "127.0.0.1:8030";
+
+#[derive(Clone, Debug, Parser)]
 #[clap(disable_help_flag = true)]
 pub struct Args {
     #[arg(
@@ -50,8 +52,58 @@ pub struct Args {
     pub headless: bool,
 
     #[arg(
+        long = "server_addr",
+        default_value_t = String::from(DEFAULT_SERVER_ADDR),
+        help = "Specify the address of the remote server."
+    )]
+    pub server_addr: String,
+
+    #[arg(
         long,
         action = ArgAction::HelpLong
     )]
     help: Option<bool>,
+}
+
+impl Default for Args {
+    fn default() -> Self {
+        Args::parse_from([""])
+    }
+}
+
+impl Args {
+    pub fn threads(mut self, threads: usize) -> Self {
+        self.threads = threads;
+        self
+    }
+
+    pub fn image_width(mut self, image_width: usize) -> Self {
+        self.image_width = image_width;
+        self
+    }
+
+    pub fn image_height(mut self, image_height: usize) -> Self {
+        self.image_height = image_height;
+        self
+    }
+
+    pub fn fps(mut self, fps: usize) -> Self {
+        self.fps = fps;
+        self
+    }
+
+    pub fn turns(mut self, turns: usize) -> Self {
+        self.turns = turns;
+        self
+    }
+
+    pub fn headless(mut self, headless: bool) -> Self {
+        self.headless = headless;
+        self
+    }
+
+    pub fn server_addr(mut self, server_addr: String) -> Self {
+        self.server_addr = server_addr;
+        self
+    }
 }

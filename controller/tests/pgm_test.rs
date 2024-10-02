@@ -1,10 +1,11 @@
+use anyhow::Result;
 use clap::{Command, value_parser, Arg};
 use colored::Colorize;
-use gol_rs::util::logger;
-use gol_rs::gol::{Params, self, event::{Event, State}};
-use log::{debug, Level};
+use gol_rs_controller::args::{self, Args};
+use gol_rs_controller::util::logger;
+use gol_rs_controller::gol::{Params, self, event::{Event, State}};
+use log::Level;
 use sdl2::keyboard::Keycode;
-use tokio::sync::mpsc;
 use crate::utils::io::read_alive_cells;
 use crate::utils::visualise::assert_eq_board;
 
@@ -14,18 +15,26 @@ mod utils;
 async fn main() {
     let start = std::time::Instant::now();
     logger::init(Level::Debug, false);
-    let command = Command::new("Gol")
+    let command = Command::new("Gol Test")
         .arg(Arg::new("threads")
             .short('t')
             .long("threads")
             .required(false)
             .default_value("16")
             .value_parser(value_parser!(usize)))
+        .arg(Arg::new("server_addr")
+            .long("server_addr")
+            .required(false)
+            .default_value(args::DEFAULT_SERVER_ADDR)
+            .value_parser(value_parser!(String)))
         .get_matches();
     let threads = command.get_one::<usize>("threads").unwrap().to_owned();
     assert!(threads > 0, "Threads for testing should be greater than 0");
+    let server_addr = command.get_one::<String>("server_addr").unwrap().to_owned();
+    let args = Args::default().threads(threads).server_addr(server_addr);
 
-    let passed_tests = test_pgm(threads).await;
+    let passed_tests = test_pgm(args).await.unwrap();
+
     println!(
         "\ntest result: {}. {} passed; finished in {:.2}s\n",
         "ok".green(),
@@ -36,7 +45,7 @@ async fn main() {
 }
 
 /// Pgm tests 16x16, 64x64 and 512x512 image output files on 0, 1 and 100 turns using 1-16 worker threads.
-async fn test_pgm(threads: usize) -> usize {
+async fn test_pgm(args: Args) -> Result<usize> {
     let mut passed_test = 0;
     let size = [(16_usize, 16_usize), (64, 64), (512, 512)];
     let turns = [0_usize, 1, 100];
@@ -50,28 +59,27 @@ async fn test_pgm(threads: usize) -> usize {
                 expected_turns
             );
             let expected_alive = read_alive_cells(path, width, height).unwrap();
-            for thread in 1..=threads {
-                let params = Params {
-                    turns: expected_turns,
-                    threads: thread,
-                    image_width: width,
-                    image_height: height,
-                };
-                debug!(target: "Test", "{} - {:?}", "Testing Pgm".cyan(), params);
-                let (events_tx, mut events_rx) = mpsc::channel::<Event>(1000);
-                let (_key_presses_tx, key_presses_rx) = mpsc::channel::<Keycode>(10);
-                tokio::spawn(gol::run(params, events_tx, key_presses_rx));
+            for thread in 1..=args.threads {
+                let args = args.clone()
+                    .turns(expected_turns)
+                    .threads(thread)
+                    .image_width(width)
+                    .image_height(height);
+                log::debug!(target: "Test", "{} - {:?}", "Testing Pgm".cyan(), Params::from(args.clone()));
+                let (_key_presses_tx, key_presses_rx) = flume::bounded::<Keycode>(10);
+                let (events_tx, events_rx) = flume::bounded::<Event>(1000);
+                tokio::spawn(gol::run(args.clone(), events_tx, key_presses_rx));
                 loop {
-                    if let Some(Event::StateChange { new_state: State::Quitting, .. }) = events_rx.recv().await {
+                    if let Ok(Event::StateChange { new_state: State::Quitting, .. }) = events_rx.recv_async().await {
                         break
                     }
                 }
                 let path = format!("out/{}x{}x{}.pgm", width, height, expected_turns);
-                let output = read_alive_cells(path, params.image_width, params.image_height).unwrap();
-                assert_eq_board(params, &output, &expected_alive);
+                let output = read_alive_cells(path, args.image_width, args.image_height).unwrap();
+                assert_eq_board(args, &output, &expected_alive);
                 passed_test += 1;
             }
         }
     }
-    passed_test
+    Ok(passed_test)
 }
