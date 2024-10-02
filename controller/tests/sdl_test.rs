@@ -6,14 +6,15 @@ use flume::{Receiver, Sender};
 use gol_rs_controller::{args::{self, Args}, gol::{self, event::{Event, State}, Params}, util::{cell::{CellCoord, CellValue}, logger}};
 use log::Level;
 use sdl2::keyboard::Keycode;
-use tokio::{sync::{watch, oneshot}, select};
-use utils::{io::{read_alive_counts, read_alive_cells}, visualise::assert_eq_board, sdl, common::deadline};
+use tokio::select;
+use utils::{common::deadline, io::{read_alive_cells, read_alive_counts}, sdl, visualise::assert_eq_board};
 
 mod utils;
 
 #[tokio::main]
 async fn main() {
     let start = std::time::Instant::now();
+    logger::set_panic_hook();
     logger::init(Level::Debug, false);
     let command = Command::new("Gol Test")
         .arg(Arg::new("sdl")
@@ -57,7 +58,7 @@ async fn test_sdl(args: Args) -> Result<usize> {
     let (key_presses_forward_tx, key_presses_forward_rx) = flume::bounded::<Keycode>(10);
     let (events_tx, events_rx) = flume::bounded::<Event>(1000);
     let (events_forward_tx, events_forward_rx) = flume::bounded::<Event>(1000);
-    let (gol_done_tx, gol_done_rx) = oneshot::channel();
+    let (gol_done_tx, gol_done_rx) = flume::bounded::<()>(1);
 
     let gol = tokio::spawn({
         let args = args.clone();
@@ -94,7 +95,7 @@ struct Tester {
     args: Args,
     key_presses: Sender<Keycode>,
     events: Receiver<Event>,
-    events_watcher: watch::Receiver<Option<Event>>,
+    events_watcher: Receiver<Event>,
     turn: u32,
     world: Vec<Vec<CellValue>>,
     alive_map: HashMap<u32, u32>,
@@ -105,9 +106,9 @@ impl Tester {
         args: Args,
         key_presses: Sender<Keycode>,
         events: Receiver<Event>,
-        gol_done: oneshot::Receiver<()>,
+        gol_done: Receiver<()>,
     ) -> Result<()> {
-        let (watcher_tx, watcher_rx) = watch::channel::<Option<Event>>(None);
+        let (watcher_tx, watcher_rx) = flume::unbounded::<Event>();
         let mut tester = Tester {
             args: args.clone(),
             key_presses,
@@ -153,9 +154,9 @@ impl Tester {
                             tester.test_alive();
                             tester.test_gol();
                         },
-                        e @ Ok(Event::ImageOutputComplete { .. }) => watcher_tx.send(e.ok())?,
-                        e @ Ok(Event::StateChange { .. }) => watcher_tx.send(e.ok())?,
-                        e @ Ok(Event::FinalTurnComplete { .. }) => watcher_tx.send(e.ok())?,
+                        e @ Ok(Event::ImageOutputComplete { .. }) => watcher_tx.send(e?)?,
+                        e @ Ok(Event::StateChange { .. }) => watcher_tx.send(e?)?,
+                        e @ Ok(Event::FinalTurnComplete { .. }) => watcher_tx.send(e?)?,
                         Ok(_) => (),
                         Err(_) => {
                             if !cell_flipped_received {
@@ -165,7 +166,7 @@ impl Tester {
                                 panic!("No TurnComplete events received");
                             }
                             quitting.await?;
-                            gol_done.await?;
+                            gol_done.recv_async().await?;
                             deadline.abort();
                             break
                         },
@@ -214,74 +215,81 @@ impl Tester {
 
     fn test_output(&self, delay: Duration) -> impl Future<Output = ()> {
         let key_presses = self.key_presses.clone();
-        let mut event_watcher = self.events_watcher.clone();
+        let event_watcher = self.events_watcher.clone();
         let (width, height) = (self.args.image_width, self.args.image_height);
         async move {
             tokio::time::sleep(delay).await;
             log::debug!(target: "Test", "{}", "Testing image output".cyan());
+            event_watcher.drain();
             key_presses.send_async(Keycode::S).await.unwrap();
             tokio::time::timeout(Duration::from_secs(4), async {
-                let event = event_watcher.wait_for(|e|
-                    matches!(e, Some(Event::ImageOutputComplete { .. }))
-                ).await.unwrap().to_owned();
-
-                if let Some(Event::ImageOutputComplete { completed_turns, filename }) = event {
-                    assert_eq!(
-                        filename.to_owned(),
-                        format!("{}x{}x{}", width, height, completed_turns),
-                        "Filename is not correct"
-                    );
+                while let Ok(event) = event_watcher.recv_async().await {
+                    if let Event::ImageOutputComplete { completed_turns, filename } = event {
+                        assert_eq!(
+                            filename.to_owned(),
+                            format!("{}x{}x{}", width, height, completed_turns),
+                            "Filename is not correct"
+                        );
+                        break;
+                    }
                 }
-
             }).await.expect("No ImageOutput events received in 4 seconds");
         }
     }
 
     fn test_pause(&self, delay: Duration) -> impl Future<Output = ()> {
         let key_presses = self.key_presses.clone();
-        let mut event_watcher = self.events_watcher.clone();
+        let event_watcher = self.events_watcher.clone();
         let test_output = self.test_output(Duration::from_secs(2));
         async move {
             tokio::time::sleep(delay).await;
             log::debug!(target: "Test", "{}", "Testing Pause key pressed".cyan());
+            event_watcher.drain();
             key_presses.send_async(Keycode::P).await.unwrap();
             tokio::time::timeout(Duration::from_secs(2), async {
-                event_watcher.wait_for(|e|
-                    matches!(e, Some(Event::StateChange { new_state: State::Pause, .. }))).await.unwrap()
+                while let Ok(event) = event_watcher.recv_async().await {
+                    if let Event::StateChange { new_state: State::Pause, .. } = event { break }
+                }
             }).await.expect("No Pause events received in 2 seconds");
 
             test_output.await;
 
             tokio::time::sleep(Duration::from_secs(2)).await;
             log::debug!(target: "Test", "{}", "Testing Pause key pressed again".cyan());
+            event_watcher.drain();
             key_presses.send_async(Keycode::P).await.unwrap();
             tokio::time::timeout(Duration::from_secs(2), async {
-                event_watcher.wait_for(|e|
-                    matches!(e, Some(Event::StateChange { new_state: State::Executing, .. }))).await.unwrap();
+                while let Ok(event) = event_watcher.recv_async().await {
+                    if let Event::StateChange { new_state: State::Executing, .. } = event { break }
+                }
             }).await.expect("No Executing events received in 2 seconds");
         }
     }
 
     fn test_quitting(&self, delay: Duration) -> impl Future<Output = ()> {
         let key_presses = self.key_presses.clone();
-        let mut event_watcher = self.events_watcher.clone();
+        let event_watcher = self.events_watcher.clone();
         async move {
             tokio::time::sleep(delay).await;
             log::debug!(target: "Test", "{}", "Testing Quit key pressed".cyan());
+            event_watcher.drain();
             key_presses.send_async(Keycode::Q).await.unwrap();
             tokio::time::timeout(Duration::from_secs(2), async {
-                event_watcher.wait_for(|e|
-                    matches!(e, Some(Event::FinalTurnComplete { .. }))).await.unwrap();
+                while let Ok(event) = event_watcher.recv_async().await {
+                    if let Event::FinalTurnComplete { .. } = event { break }
+                }
             }).await.expect("No FinalTurnComplete events received in 2 seconds");
 
             tokio::time::timeout(Duration::from_secs(4), async {
-                event_watcher.wait_for(|e|
-                    matches!(e, Some(Event::ImageOutputComplete { .. }))).await.unwrap();
+                while let Ok(event) = event_watcher.recv_async().await {
+                    if let Event::ImageOutputComplete { .. } = event { break }
+                }
             }).await.expect("No ImageOutputComplete events received in 4 seconds");
 
             tokio::time::timeout(Duration::from_secs(2), async {
-                event_watcher.wait_for(|e|
-                    matches!(e, Some(Event::StateChange { new_state: State::Quitting, .. }))).await.unwrap();
+                while let Ok(event) = event_watcher.recv_async().await {
+                    if let Event::StateChange { new_state: State::Quitting, .. } = event { break }
+                }
             }).await.expect("No StateChange Quitting events received in 2 seconds");
         }
     }

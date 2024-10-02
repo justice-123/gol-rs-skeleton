@@ -5,13 +5,14 @@ use colored::Colorize;
 use log::Level;
 use gol_rs_controller::{args::{self, Args}, gol::{self, event::{Event, State}, Params}, util::logger};
 use sdl2::keyboard::Keycode;
-use crate::utils::{visualise::assert_eq_board, io::read_alive_cells};
+use utils::{visualise::assert_eq_board, io::read_alive_cells};
 
 mod utils;
 
 #[tokio::main]
 async fn main() {
     let start = std::time::Instant::now();
+    logger::set_panic_hook();
     logger::init(Level::Debug, false);
     let command = Command::new("Gol Test")
         .arg(Arg::new("threads")

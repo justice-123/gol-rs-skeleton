@@ -8,14 +8,14 @@ use gol_rs_controller::args::{self, Args};
 use gol_rs_controller::util::logger;
 use gol_rs_controller::gol::{Params, self, event::{Event, State}};
 use sdl2::keyboard::Keycode;
-use crate::utils::common::deadline;
-use crate::utils::io::read_alive_counts;
+use utils::{common::deadline, io::read_alive_counts};
 
 mod utils;
 
 #[tokio::main]
 async fn main() {
     let start = std::time::Instant::now();
+    logger::set_panic_hook();
     logger::init(Level::Debug, false);
     let command = Command::new("Gol Test")
         .arg(Arg::new("server_addr")

@@ -9,3 +9,11 @@ pub fn init(level: Level, backtrace: bool) {
     std::env::set_var("RUST_BACKTRACE", &backtrace);
     let _ = env_logger::try_init();
 }
+
+pub fn set_panic_hook() {
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        hook(panic_info);
+        std::process::exit(1);
+    }));
+}
