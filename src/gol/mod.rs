@@ -3,9 +3,9 @@ use crate::gol::distributor::{DistributorChannels, distributor};
 use crate::gol::event::Event;
 use crate::gol::io::{start_io, IoChannels};
 use anyhow::Result;
-use log::error;
+use flume::{Receiver, Sender};
+use io::IoCommand;
 use sdl2::keyboard::Keycode;
-use tokio::sync::mpsc::{Sender, Receiver, self};
 
 pub mod distributor;
 pub mod event;
@@ -28,15 +28,15 @@ pub async fn run<P: Into<Params>>(
     let params: Params = params.into();
     // TODO: Put the missing channels in here.
 
-    let (io_command_tx, io_command_rx) = mpsc::unbounded_channel();
-    let (io_idle_tx, io_idle_rx) = mpsc::unbounded_channel();
+    let (io_command_tx, io_command_rx) = flume::unbounded::<IoCommand>();
+    let (io_idle_tx, io_idle_rx) = flume::unbounded::<bool>();
 
     let io_channels = IoChannels {
         command: Some(io_command_rx),
         idle: Some(io_idle_tx),
         filename: None,
-        output: None,
         input: None,
+        output: None,
     };
 
     tokio::spawn(start_io(params.clone(), io_channels));
@@ -47,12 +47,12 @@ pub async fn run<P: Into<Params>>(
         io_command: Some(io_command_tx),
         io_idle: Some(io_idle_rx),
         io_filename: None,
-        io_output: None,
         io_input: None,
+        io_output: None,
     };
 
     tokio::task::spawn_blocking(move || distributor(params, distributor_channels))
-        .await?.err().map(|e| error!(target: "Distributor", "{}", e));
+        .await?.err().map(|e| log::error!(target: "Distributor", "{}", e));
 
     Ok(())
 }

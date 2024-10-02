@@ -1,8 +1,8 @@
 use crate::gol::Params;
 use crate::util::{cell::CellValue, traits::AsBytes};
 use anyhow::{Context, Result};
-use log::error;
-use tokio::{sync::mpsc::{UnboundedReceiver, UnboundedSender}, fs::File, io::{AsyncReadExt, AsyncWriteExt, BufWriter}};
+use flume::{Receiver, Sender};
+use tokio::{fs::{create_dir_all, File}, io::{AsyncReadExt, AsyncWriteExt, BufWriter}};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum IoCommand {
@@ -12,11 +12,11 @@ pub enum IoCommand {
 }
 
 pub struct IoChannels {
-    pub command: Option<UnboundedReceiver<IoCommand>>,
-    pub idle: Option<UnboundedSender<bool>>,
-    pub filename: Option<UnboundedReceiver<String>>,
-    pub input: Option<UnboundedSender<CellValue>>,
-    pub output: Option<UnboundedReceiver<CellValue>>,
+    pub command: Option<Receiver<IoCommand>>,
+    pub idle: Option<Sender<bool>>,
+    pub filename: Option<Receiver<String>>,
+    pub input: Option<Sender<CellValue>>,
+    pub output: Option<Receiver<CellValue>>,
 }
 
 struct IoState {
@@ -26,22 +26,22 @@ struct IoState {
 
 pub async fn start_io(params: Params, channels: IoChannels) {
     let mut io = IoState { params, channels };
-    let mut command = io.channels.command
+    let command = io.channels.command
         .take().context("The command channel is None").unwrap();
     let idle = io.channels.idle
         .take().context("The idle channel is None").unwrap();
     loop {
-        match command.recv().await {
-            Some(IoCommand::IoInput) => if let Err(e) = io.read_pgm_image().await {
-                error!(target: "IO", "{}", e);
+        match command.recv_async().await {
+            Ok(IoCommand::IoInput) => if let Err(e) = io.read_pgm_image().await {
+                log::error!(target: "IO", "{}", e);
             },
-            Some(IoCommand::IoOutput) => if let Err(e) = io.write_pgm_image().await {
-                error!(target: "IO", "{}", e);
+            Ok(IoCommand::IoOutput) => if let Err(e) = io.write_pgm_image().await {
+                log::error!(target: "IO", "{}", e);
             },
-            Some(IoCommand::IoCheckIdle) => if let Err(e) = idle.send(true) {
-                error!(target: "IO", "{}", e);
+            Ok(IoCommand::IoCheckIdle) => if let Err(e) = idle.send(true) {
+                log::error!(target: "IO", "{}", e);
             },
-            None => break,
+            Err(_) => break,
         }
     }
 }
@@ -50,7 +50,7 @@ impl IoState {
     async fn read_pgm_image(&mut self) -> Result<()> {
         let filename = self.channels.filename
             .as_mut().context("The filename channel is None")?
-            .recv().await.context("The filename channel has been closed")?;
+            .recv_async().await.context("The filename channel has been closed")?;
         let path = format!("images/{}.pgm", filename);
         let mut buffer = Vec::new();
         File::open(path).await?.read_to_end(&mut buffer).await?;
@@ -66,10 +66,10 @@ impl IoState {
     }
 
     async fn write_pgm_image(&mut self) -> Result<()> {
-        std::fs::create_dir_all("out")?;
+        create_dir_all("out").await?;
         let filename = self.channels.filename
             .as_mut().context("The filename channel is None")?
-            .recv().await.context("The filename channel has been closed")?;
+            .recv_async().await.context("The filename channel has been closed")?;
         let path = format!("out/{}.pgm", filename);
         let file = File::create(path).await?;
 
@@ -87,7 +87,7 @@ impl IoState {
         let output_rx = self.channels.output
             .as_mut().context("The output channel is None")?;
         for i in world.iter_mut() {
-            *i = output_rx.recv().await.context("The output channel has been closed")?;
+            *i = output_rx.recv_async().await.context("The output channel has been closed")?;
         }
         writer.write_all(world.as_bytes()).await?;
         writer.flush().await?;

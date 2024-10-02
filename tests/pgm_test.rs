@@ -1,11 +1,11 @@
+use anyhow::Result;
 use clap::{Command, value_parser, Arg};
 use colored::Colorize;
 use gol_rs::args::Args;
 use gol_rs::util::logger;
 use gol_rs::gol::{Params, self, event::{Event, State}};
-use log::{debug, Level};
+use log::Level;
 use sdl2::keyboard::Keycode;
-use tokio::sync::mpsc;
 use crate::utils::io::read_alive_cells;
 use crate::utils::visualise::assert_eq_board;
 
@@ -26,7 +26,9 @@ async fn main() {
     let threads = command.get_one::<usize>("threads").unwrap().to_owned();
     assert!(threads > 0, "Threads for testing should be greater than 0");
     let args = Args::default().threads(threads);
-    let passed_tests = test_pgm(args).await;
+
+    let passed_tests = test_pgm(args).await.unwrap();
+
     println!(
         "\ntest result: {}. {} passed; finished in {:.2}s\n",
         "ok".green(),
@@ -37,7 +39,7 @@ async fn main() {
 }
 
 /// Pgm tests 16x16, 64x64 and 512x512 image output files on 0, 1 and 100 turns using 1-16 worker threads.
-async fn test_pgm(args: Args) -> usize {
+async fn test_pgm(args: Args) -> Result<usize> {
     let mut passed_test = 0;
     let size = [(16_usize, 16_usize), (64, 64), (512, 512)];
     let turns = [0_usize, 1, 100];
@@ -57,12 +59,12 @@ async fn test_pgm(args: Args) -> usize {
                     .threads(thread)
                     .image_width(width)
                     .image_height(height);
-                debug!(target: "Test", "{} - {:?}", "Testing Pgm".cyan(), Params::from(args.clone()));
-                let (events_tx, mut events_rx) = mpsc::channel::<Event>(1000);
-                let (_key_presses_tx, key_presses_rx) = mpsc::channel::<Keycode>(10);
+                log::debug!(target: "Test", "{} - {:?}", "Testing Pgm".cyan(), Params::from(args.clone()));
+                let (_key_presses_tx, key_presses_rx) = flume::bounded::<Keycode>(10);
+                let (events_tx, events_rx) = flume::bounded::<Event>(1000);
                 tokio::spawn(gol::run(args.clone(), events_tx, key_presses_rx));
                 loop {
-                    if let Some(Event::StateChange { new_state: State::Quitting, .. }) = events_rx.recv().await {
+                    if let Ok(Event::StateChange { new_state: State::Quitting, .. }) = events_rx.recv_async().await {
                         break
                     }
                 }
@@ -73,5 +75,5 @@ async fn test_pgm(args: Args) -> usize {
             }
         }
     }
-    passed_test
+    Ok(passed_test)
 }

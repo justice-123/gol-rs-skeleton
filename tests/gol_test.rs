@@ -1,10 +1,10 @@
+use anyhow::Result;
 use core::panic;
 use clap::{Command, Arg, value_parser};
 use colored::Colorize;
-use log::{debug, Level};
-use sdl2::keyboard::Keycode;
-use tokio::sync::mpsc;
+use log::Level;
 use gol_rs::{args::Args, gol::{self, event::{Event, State}, Params}, util::logger};
+use sdl2::keyboard::Keycode;
 use crate::utils::{visualise::assert_eq_board, io::read_alive_cells};
 
 mod utils;
@@ -24,7 +24,9 @@ async fn main() {
     let threads = command.get_one::<usize>("threads").unwrap().to_owned();
     assert!(threads > 0, "Threads for testing should be greater than 0");
     let args = Args::default().threads(threads);
-    let passed_tests = test_gol(args).await;
+
+    let passed_tests = test_gol(args).await.unwrap();
+
     println!(
         "\ntest result: {}. {} passed; finished in {:.2}s\n",
         "ok".green(),
@@ -35,7 +37,7 @@ async fn main() {
 }
 
 /// Gol tests 16x16, 64x64 and 512x512 images on 0, 1 and 100 turns using 1-16 worker threads.
-async fn test_gol(args: Args) -> usize {
+async fn test_gol(args: Args) -> Result<usize> {
     let mut passed_tests = 0;
     let size = [(16_usize, 16_usize), (64, 64), (512, 512)];
     let turns = [0_usize, 1, 100];
@@ -56,14 +58,14 @@ async fn test_gol(args: Args) -> usize {
                     .threads(thread)
                     .image_width(width)
                     .image_height(height);
-                debug!(target: "Test", "{} - {:?}", "Testing Gol".cyan(), Params::from(args.clone()));
-                let (events_tx, mut events_rx) = mpsc::channel::<Event>(1000);
-                let (_key_presses_tx, key_presses_rx) = mpsc::channel::<Keycode>(10);
+                log::debug!(target: "Test", "{} - {:?}", "Testing Gol".cyan(), Params::from(args.clone()));
+                let (_key_presses_tx, key_presses_rx) = flume::bounded::<Keycode>(10);
+                let (events_tx, events_rx) = flume::bounded::<Event>(1000);
                 tokio::spawn(gol::run(args.clone(), events_tx, key_presses_rx));
                 let mut final_turn_complete = false;
                 loop {
-                    match events_rx.recv().await {
-                        Some(Event::FinalTurnComplete { completed_turns, alive }) => {
+                    match events_rx.recv_async().await {
+                        Ok(Event::FinalTurnComplete { completed_turns, alive }) => {
                             final_turn_complete = true;
                             assert_eq!(
                                 completed_turns, expected_turns as u32,
@@ -71,8 +73,8 @@ async fn test_gol(args: Args) -> usize {
                             );
                             assert_eq_board(args.clone(), &alive, &expected_alive);
                         },
-                        Some(Event::StateChange { new_state: State::Quitting, .. }) if final_turn_complete => break,
-                        None => panic!("No FinalTurnComplete events received {:?}", Params::from(args)),
+                        Ok(Event::StateChange { new_state: State::Quitting, .. }) if final_turn_complete => break,
+                        Err(_) => panic!("No FinalTurnComplete events received {:?}", Params::from(args)),
                         _ => (),
                     };
 
@@ -82,5 +84,5 @@ async fn test_gol(args: Args) -> usize {
 
         }
     }
-    passed_tests
+    Ok(passed_tests)
 }
