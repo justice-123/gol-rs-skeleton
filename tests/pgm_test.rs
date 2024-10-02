@@ -6,14 +6,14 @@ use gol_rs::util::logger;
 use gol_rs::gol::{Params, self, event::{Event, State}};
 use log::Level;
 use sdl2::keyboard::Keycode;
-use crate::utils::io::read_alive_cells;
-use crate::utils::visualise::assert_eq_board;
+use utils::{io::read_alive_cells, visualise::assert_eq_board};
 
 mod utils;
 
 #[tokio::main]
 async fn main() {
     let start = std::time::Instant::now();
+    logger::set_panic_hook();
     logger::init(Level::Debug, false);
     let command = Command::new("Gol Test")
         .arg(Arg::new("threads")

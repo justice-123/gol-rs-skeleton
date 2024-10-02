@@ -252,8 +252,7 @@ pub mod common {
     {
         tokio::spawn(async move {
             tokio::time::sleep(ddl).await;
-            log::error!(target: "Test", "{}", msg);
-            std::process::exit(1);
+            panic!("{}", msg);
         })
     }
 }
