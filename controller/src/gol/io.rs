@@ -32,15 +32,9 @@ pub async fn start_io(params: Params, channels: IoChannels) {
         .take().context("The idle channel is None").unwrap();
     loop {
         match command.recv_async().await {
-            Ok(IoCommand::IoInput) => if let Err(e) = io.read_pgm_image().await {
-                log::error!(target: "IO", "{}", e);
-            },
-            Ok(IoCommand::IoOutput) => if let Err(e) = io.write_pgm_image().await {
-                log::error!(target: "IO", "{}", e);
-            },
-            Ok(IoCommand::IoCheckIdle) => if let Err(e) = idle.send(true) {
-                log::error!(target: "IO", "{}", e);
-            },
+            Ok(IoCommand::IoInput) => io.read_pgm_image().await.unwrap(),
+            Ok(IoCommand::IoOutput) => io.write_pgm_image().await.unwrap(),
+            Ok(IoCommand::IoCheckIdle) => idle.send_async(true).await.unwrap(),
             Err(_) => break,
         }
     }
@@ -60,7 +54,7 @@ impl IoState {
 
         for byte in pgm.into_bytes() {
             self.channels.input.as_ref().context("The input channel is None")?
-                .send(CellValue::from(byte))?;
+                .send_async(CellValue::from(byte)).await?;
         }
         Ok(())
     }
