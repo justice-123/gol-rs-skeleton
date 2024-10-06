@@ -58,7 +58,8 @@ async fn test_sdl(args: Args) -> Result<usize> {
         let args = args.clone();
         async move {
             gol::run(args, events_tx, key_presses_forward_rx).await.unwrap();
-            Ok(gol_done_tx.send(()))
+            gol_done_tx.send_async(()).await.unwrap();
+            Ok(())
         }
     });
     let tester = tokio::spawn(
@@ -148,9 +149,9 @@ impl Tester {
                             tester.test_alive();
                             tester.test_gol();
                         },
-                        e @ Ok(Event::ImageOutputComplete { .. }) => watcher_tx.send(e?)?,
-                        e @ Ok(Event::StateChange { .. }) => watcher_tx.send(e?)?,
-                        e @ Ok(Event::FinalTurnComplete { .. }) => watcher_tx.send(e?)?,
+                        e @ Ok(Event::ImageOutputComplete { .. }) => watcher_tx.send_async(e?).await?,
+                        e @ Ok(Event::StateChange { .. }) => watcher_tx.send_async(e?).await?,
+                        e @ Ok(Event::FinalTurnComplete { .. }) => watcher_tx.send_async(e?).await?,
                         Ok(_) => (),
                         Err(_) => {
                             if !cell_flipped_received {

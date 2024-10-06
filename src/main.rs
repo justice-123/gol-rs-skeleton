@@ -1,4 +1,3 @@
-use anyhow::Result;
 use clap::Parser;
 use flume::Sender;
 use log::Level;
@@ -10,7 +9,7 @@ use gol_rs::sdl;
 use gol_rs::util::logger;
 
 #[tokio::main(flavor = "multi_thread")]
-async fn main() -> Result<()> {
+async fn main() {
     let args = Args::parse();
     logger::init(Level::Info, false);
 
@@ -28,15 +27,13 @@ async fn main() -> Result<()> {
         try_join!(
             gol::run(args.clone(), events_tx, key_presses_rx),
             sdl::r#loop::run(args, events_rx, key_presses_tx)
-        )?;
+        ).unwrap();
     } else {
         try_join!(
             gol::run(args, events_tx, key_presses_rx),
             sdl::r#loop::run_headless(events_rx)
-        )?;
+        ).unwrap();
     }
-
-    Ok(())
 }
 
 async fn sigint(key_presses_tx: Sender<Keycode>) {

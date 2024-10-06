@@ -51,8 +51,8 @@ pub async fn run<P: Into<Params>>(
         io_output: None,
     };
 
-    tokio::task::spawn_blocking(move || distributor(params, distributor_channels))
-        .await?.err().map(|e| log::error!(target: "Distributor", "{}", e));
+    tokio::task::spawn_blocking(move ||
+        distributor(params, distributor_channels)).await??;
 
     Ok(())
 }
