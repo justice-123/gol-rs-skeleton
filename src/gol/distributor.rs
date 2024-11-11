@@ -1,12 +1,10 @@
 use crate::gol::event::{Event, State};
-use crate::gol::Params;
-use crate::gol::io::IoCommand;
-use crate::util::cell::CellValue;
+use crate::gol::{Params, io::IoCommand};
+use crate::util::cell::{CellCoord, CellValue};
+use crate::util::cell::CellValue::{Alive, Dead};
 use anyhow::Result;
 use flume::{Receiver, Sender};
 use sdl2::keyboard::Keycode;
-
-use super::io::IoChannels;
 
 pub struct DistributorChannels {
     pub events: Option<Sender<Event>>,
@@ -18,83 +16,155 @@ pub struct DistributorChannels {
     pub io_output: Option<Sender<CellValue>>,
 }
 
-pub fn distributor(
-    params: Params,
-    mut channels: DistributorChannels
-) -> Result<()> {
-    let events = channels.events.take().unwrap();
-    let key_presses = channels.key_presses.take().unwrap();
-    let io_command = channels.io_command.take().unwrap();
-    let io_idle = channels.io_idle.take().unwrap();
-
-    // TODO: Create a 2D vector to store the world.
-
-    let mut matrix: Vec<Vec<CellValue>> = vec![vec![CellValue::Dead; params.image_width]; params.image_height];
-
-
-
-    let turn = 0;
-    events.send(
-        Event::StateChange { completed_turns: turn, new_state: State::Executing })?;
-
-
-    // TODO: Execute all turns of the Game of Life.
-
-    let imagename = format!("{}x{}", params.image_width, params.image_height);
-
-    channels.io_command.unwrap().send(IoCommand::IoInput);
-    channels.io_filename.unwrap().send(imagename).expect("failed to send file name");
-
-
-    if let Some(io_input) = channels.io_input.take() {
-        let mut matrix: Vec<Vec<CellValue>> = vec![vec![CellValue::default(); params.image_width]; params.image_height];
-    
-        for y in 0..params.image_height {
-            for x in 0..params.image_width {
-                match io_input.try_recv() {
-                    Ok(data) => {
-                        // Store the data in the 2D matrix
-                        matrix[y][x] = data;
-                        println!("Received data at ({}, {}): {:?}", y, x, data);
-                    },
-                    Err(flume::TryRecvError::Empty) => {
-                        // Handle an empty channel if needed
-                        println!("Channel is empty at ({}, {})", y, x);
-                    },
-                    Err(flume::TryRecvError::Disconnected) => {
-                        // Handle a disconnected channel
-                        println!("Channel is disconnected at ({}, {})", y, x);
-                        break; // Exit the loop if the channel is disconnected
-                    },
-                }
+fn get_alive_cells(world: &Vec<Vec<CellValue>>, params: &Params) -> Vec<CellCoord> {
+    let mut alive_cells = Vec::new();
+    for y in 0..params.image_height {
+        for x in 0..params.image_width {
+            if world[y][x] == Alive {
+                alive_cells.push(CellCoord { x, y });
             }
         }
-    } else {
-        println!("io_input channel is not present");
+    }
+    alive_cells
+}
+
+pub fn distributor(
+    params: Params,
+    channels:  &DistributorChannels,
+) -> Result<()> {
+    //we need to use as_ref to access the value inside the option
+    let events = channels.events.as_ref().expect("events channel missing").clone();
+    let io_command = channels.io_command.as_ref().expect("io_command channel missing").clone();
+    let io_filename = channels.io_filename.as_ref().expect("io_filename channel missing").clone();
+
+    // Create a 2D vector to store the initial world state
+    let mut matrix: Vec<Vec<CellValue>> = vec![vec![Dead; params.image_width]; params.image_height];
+    let imagename = format!("{}x{}", params.image_width, params.image_height);
+
+    // Use a block to limit the scope of the immutable borrow of `io_input`
+    {
+        let io_input = channels.io_input.as_ref().expect("io_input channel missing");
+
+        io_command.send(IoCommand::IoInput)?;
+        io_filename.send(imagename)?;
+
+        for y in 0..params.image_height {
+            for x in 0..params.image_width {
+                matrix[y][x] = io_input.recv()?;
+            }
+        }
+    } // `io_input` immutable borrow ends here
+
+    events.send(Event::StateChange {
+        completed_turns: 0,
+        new_state: State::Executing,
+    })?;
+
+    let mut turn = 0;
+    while turn < params.turns {
+        // calculate new alive cells from the current world state
+        let new_alive = calculate_new_alive(&matrix, &params);
+
+        // output the current state
+        make_output(&new_alive, &params, channels)?;
+
+        // update the current world state for the next iteration
+        matrix = new_alive;
+        turn += 1;
     }
 
-    //we have the world written in now 
+    events.send(Event::FinalTurnComplete {
+        completed_turns: turn as u32,
+        alive: get_alive_cells(&matrix, &params),
+    })?;
 
-    // TODO: Report the final state using FinalTurnCompleteEvent.
+    // use a block to limit the scope of the immutable borrow of `io_idle`
+    {
+        let io_idle = channels.io_idle.as_ref().expect("io_idle channel missing");
 
+        // Ensure Io has completed any output before exiting
+        io_command.send(IoCommand::IoCheckIdle)?;
+        io_idle.recv()?;
+    } // `io_idle` immutable borrow ends here
 
-    // Make sure that the Io has finished any output before exiting.
-    io_command.send(IoCommand::IoCheckIdle)?;
-    io_idle.recv()?;
+    events.send(Event::StateChange {
+        completed_turns: turn as u32,
+        new_state: State::Quitting,
+    })?;
 
-    events.send(
-        Event::StateChange { completed_turns: turn, new_state: State::Quitting })?;
     Ok(())
 }
 
-pub fn make_output(world: Vec<Vec<CellValue>>, params: Params, mut channels: DistributorChannels) {
-    let events = channels.events.take().unwrap();
-    let key_presses = channels.key_presses.take().unwrap();
-    let io_command = channels.io_command.take().unwrap();
-    let io_idle = channels.io_idle.take().unwrap();
-    let io_filename = channels.io_filename.take().unwrap();
-    io_command.send(IoCommand::IoOutput);
-    io_filename.send("out");
+pub fn make_output(
+    world: &Vec<Vec<CellValue>>,
+    params: &Params,
+    channels: &DistributorChannels, // Changed to immutable reference
+) -> Result<()> {
 
+    let io_command = channels.io_command.as_ref().expect("io_command channel missing").clone();
+    let io_filename = channels.io_filename.as_ref().expect("io_filename channel missing").clone();
+    let io_output = channels.io_output.as_ref().expect("io_output channel missing").clone();
 
+    io_command.send(IoCommand::IoOutput)?;
+    io_filename.send("out".to_string())?;
+
+    for y in 0..params.image_height {
+        for x in 0..params.image_width {
+            io_output.send(world[y][x])?;
+        }
+    }
+
+    // Use a block to limit the scope of the immutable borrow of `io_idle`
+    {
+        let io_idle = channels.io_idle.as_ref().expect("io_idle channel missing");
+        io_command.send(IoCommand::IoCheckIdle)?;
+        io_idle.recv()?;
+    } // `io_idle` immutable borrow ends here
+
+    Ok(())
+}
+
+fn calculate_new_alive(world: &Vec<Vec<CellValue>>, params: &Params) -> Vec<Vec<CellValue>> {
+    let mut neighbours = vec![vec![0; params.image_width]; params.image_height];
+
+    for y in 0..params.image_height {
+        for x in 0..params.image_width {
+            if world[y][x] == Alive {
+                for i in -1..=1 {
+                    for j in -1..=1 {
+                        if i == 0 && j == 0 {
+                            continue;
+                        }
+
+                        let x_coord = ((x as isize + i + params.image_width as isize)
+                            % params.image_width as isize) as usize;
+                        let y_coord = ((y as isize + j + params.image_height as isize)
+                            % params.image_height as isize) as usize;
+
+                        neighbours[y_coord][x_coord] += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    let mut new_world = world.clone();
+
+    for y in 0..params.image_height {
+        for x in 0..params.image_width {
+            let num_neighbours = neighbours[y][x];
+            if world[y][x] == Alive {
+                if num_neighbours < 2 || num_neighbours > 3 {
+                    new_world[y][x] = Dead;
+                }
+                //
+            } else {
+                if num_neighbours == 3 {
+                    new_world[y][x] = Alive; 
+                }
+            }
+        }
+    }
+
+    new_world
 }

@@ -28,6 +28,7 @@ pub async fn run<P: Into<Params>>(
 ) -> Result<()> {
     let params: Params = params.into();
     // TODO: Put the missing channels in here.
+    // TODO: DONE
 
     let (io_command_tx, io_command_rx) = flume::unbounded::<IoCommand>();
     let (io_idle_tx, io_idle_rx) = flume::unbounded::<bool>();
@@ -57,10 +58,11 @@ pub async fn run<P: Into<Params>>(
     };
 
     tokio::task::spawn_blocking(move ||
-        distributor(params, distributor_channels)).await??;
+        distributor(params, &distributor_channels)).await??;
 
     Ok(())
 }
+
 
 impl From<Args> for Params {
     fn from(args: Args) -> Self {
