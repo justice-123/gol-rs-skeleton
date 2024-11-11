@@ -41,7 +41,7 @@ pub fn distributor(
     let mut matrix: Vec<Vec<CellValue>> = vec![vec![Dead; params.image_width]; params.image_height];
     let imagename = format!("{}x{}", params.image_width, params.image_height);
 
-    // Use a block to limit the scope of the immutable borrow of `io_input`
+    // we have to use a block to avoid immutable borrowing
     {
         let io_input = channels.io_input.as_ref().expect("io_input channel missing");
 
@@ -53,7 +53,7 @@ pub fn distributor(
                 matrix[y][x] = io_input.recv()?;
             }
         }
-    } // `io_input` immutable borrow ends here
+    }
 
     events.send(Event::StateChange {
         completed_turns: 0,
@@ -78,7 +78,7 @@ pub fn distributor(
         alive: get_alive_cells(&matrix, &params),
     })?;
 
-    // use a block to limit the scope of the immutable borrow of `io_idle`
+
     {
         let io_idle = channels.io_idle.as_ref().expect("io_idle channel missing");
 
@@ -98,7 +98,7 @@ pub fn distributor(
 pub fn make_output(
     world: &Vec<Vec<CellValue>>,
     params: &Params,
-    channels: &DistributorChannels, // Changed to immutable reference
+    channels: &DistributorChannels,
 ) -> Result<()> {
 
     let io_command = channels.io_command.as_ref().expect("io_command channel missing").clone();
@@ -114,12 +114,12 @@ pub fn make_output(
         }
     }
 
-    // Use a block to limit the scope of the immutable borrow of `io_idle`
+
     {
         let io_idle = channels.io_idle.as_ref().expect("io_idle channel missing");
         io_command.send(IoCommand::IoCheckIdle)?;
         io_idle.recv()?;
-    } // `io_idle` immutable borrow ends here
+    }
 
     Ok(())
 }
@@ -160,7 +160,7 @@ fn calculate_new_alive(world: &Vec<Vec<CellValue>>, params: &Params) -> Vec<Vec<
                 //
             } else {
                 if num_neighbours == 3 {
-                    new_world[y][x] = Alive; 
+                    new_world[y][x] = Alive;
                 }
             }
         }
